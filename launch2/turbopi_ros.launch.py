@@ -33,6 +33,7 @@ def launch_setup(context: LaunchContext):
     pkg_path = os.path.join(get_package_share_directory(pkg_name))
     camera = eval(context.perform_substitution(LaunchConfiguration('camera')).title())
     camera_type = context.perform_substitution(LaunchConfiguration('camera_type'))
+    debug = eval(context.perform_substitution(LaunchConfiguration('debug')).title())
     drive = context.perform_substitution(LaunchConfiguration('drive'))
     lidar = eval(context.perform_substitution(LaunchConfiguration('lidar')).title())
     sim = eval(context.perform_substitution(LaunchConfiguration('sim')).title())
@@ -65,6 +66,7 @@ def launch_setup(context: LaunchContext):
         executable='ros2_control_node',
         parameters=[robot_description, controller_params],
         output='both',
+        arguments=['--ros-args', '--log-level', 'Board:=debug'] if debug else [],
     )
 
     node_robot_state_publisher = Node(
@@ -275,6 +277,13 @@ def generate_launch_description():
             "camera",
             default_value="False",
             description="Start with v4l2_camera node (requires v4l2_camera package)",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "debug",
+            default_value="False",
+            description="Enable Board DEBUG logging in ros2_control_node (shows raw UART packets)",
         )
     )
     declared_arguments.append(
