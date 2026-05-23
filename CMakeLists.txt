@@ -24,6 +24,8 @@ set(INCLUDE_DEPENDS
     rclcpp_lifecycle
     controller_manager
     joint_limits
+    sensor_msgs
+    std_msgs
 )
 
 foreach(Dependency IN ITEMS ${INCLUDE_DEPENDS})
@@ -94,11 +96,14 @@ target_link_libraries(infrared_node infrared)
 target_link_libraries(sonar i2c)
 target_link_libraries(sonar_node sonar)
 
-# Battery, motors, servos: now via Board (UART serial)
+# Battery library (still used by test_battery)
 target_link_libraries(battery board)
-target_link_libraries(battery_node battery board)
-target_link_libraries(battery_monitor_node board)
 target_link_libraries(test_battery battery board)
+# battery_monitor_node is a pure ROS subscriber of /battery topic – no hardware links needed
+
+# battery_node is now a pure ROS subscriber – no direct hardware access.
+# It subscribes to /battery_voltage_mv published by the hardware interface.
+ament_target_dependencies(battery_node ${INCLUDE_DEPENDS})
 target_link_libraries(test_infrared i2c infrared)
 target_link_libraries(test_sonar i2c sonar)
 

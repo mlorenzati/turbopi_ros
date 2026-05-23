@@ -21,6 +21,7 @@
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/int32.hpp"
 
 #include "turbopi_hardware_interface.hpp"
 #include "turbopi.hpp"
@@ -109,6 +110,13 @@ namespace turbopi_hardware_interface
                 return hardware_interface::CallbackReturn::ERROR;
             }
         }
+
+        // Create a standalone node + publisher for raw battery mV so that
+        // battery_node (separate process) can subscribe instead of opening /dev/rrc.
+        battery_node_ = rclcpp::Node::make_shared("turbopi_battery_bridge");
+        battery_pub_  = battery_node_->create_publisher<std_msgs::msg::Int32>(
+                            "/battery_voltage_mv",
+                            rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
         return hardware_interface::CallbackReturn::SUCCESS;
     }
@@ -223,6 +231,18 @@ namespace turbopi_hardware_interface
             } 
 
             turbopi_.setJoint(joint);
+        }
+
+        // Publish battery mV every ~5 s (250 cycles at 50 Hz) so battery_node
+        // can subscribe instead of opening /dev/rrc in a separate process.
+        if (battery_pub_ && (++battery_pub_counter_ >= 250))
+        {
+            battery_pub_counter_ = 0;
+            int mv = turbopi_.getBattery();
+            auto msg = std_msgs::msg::Int32();
+            msg.data = mv;
+            battery_pub_->publish(msg);
+            rclcpp::spin_some(battery_node_);
         }
 
         return hardware_interface::return_type::OK;

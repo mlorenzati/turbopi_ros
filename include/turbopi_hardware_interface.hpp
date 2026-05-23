@@ -26,9 +26,12 @@
 #include "rclcpp/clock.hpp"
 #include "rclcpp/duration.hpp"
 #include "rclcpp/macros.hpp"
+#include "rclcpp/node.hpp"
+#include "rclcpp/publisher.hpp"
 #include "rclcpp/time.hpp"
 #include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
 #include "rclcpp_lifecycle/state.hpp"
+#include "std_msgs/msg/int32.hpp"
 
 #include "turbopi.hpp"
 
@@ -74,6 +77,11 @@ namespace turbopi_hardware_interface
         std::vector<double> hw_commands_;
         std::vector<double> hw_positions_;
         std::vector<double> hw_velocities_;
+
+        // Battery voltage publisher (mV) – shared with battery_node via /battery_voltage_mv topic
+        rclcpp::Node::SharedPtr battery_node_;
+        rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr battery_pub_;
+        int battery_pub_counter_ = 0;
     };
 
 }

@@ -16,11 +16,15 @@
 
 namespace turbopi
 {
+// Module-level pointer so getBattery() can reach the same Board instance
+static turbopi::Board* g_board = nullptr;
+
 	TurboPi::TurboPi()
 	{
         // Single shared Board instance – opens /dev/rrc at 1 Mbaud
         static Board board_;
         board_.enableReception(true);
+        g_board = &board_;
 
 		//base – motors 1-4
 		base.joints[0] = Joint(1, TYPE_MOTOR, board_);
@@ -97,5 +101,12 @@ namespace turbopi
 		if (foundJoint == false)
 		    std::cout << "Could not find joint with name " << joint.name << std::endl;
 	}
+
+    int TurboPi::getBattery()
+    {
+        if (g_board == nullptr)
+            return -1;
+        return g_board->getBattery();
+    }
 
 }

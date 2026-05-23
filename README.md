@@ -187,6 +187,10 @@ Start ROS 2 with hardware support for TurboPi on robot hardware, following
 optional arguments (all default `False` unless noted).
   - `camera:=True` - Enable the v4l2 camera node (requires `v4l2_camera` package
     and a compatible USB camera on `/dev/video0`).
+  - `camera_type:=default` - Camera type to use: `depth` (Orbbec Astra S, **default**)
+    or `default` (original 2DOF pan/tilt camera). Setting `default` also enables
+    the `position_controllers` for the pan/tilt servos. With `depth` the
+    position controller spawner is skipped entirely (the joints don't exist).
   - `drive:=mecanum` - Drive system diff or mecanum (default `diff`).
   - `lidar:=True` - Enable optional hardware lidar support (RPLidar on `/dev/ttyUSB0`).
   - `sim:=True` - Use simulated mock hardware (skips all serial/I2C access).

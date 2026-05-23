@@ -19,6 +19,7 @@ def launch_setup(context: LaunchContext):
 
     pkg_path = os.path.join(get_package_share_directory(pkg_name))
     camera = eval(context.perform_substitution(LaunchConfiguration('camera')).title())
+    camera_type = context.perform_substitution(LaunchConfiguration('camera_type'))
     drive = context.perform_substitution(LaunchConfiguration('drive'))
     lidar = eval(context.perform_substitution(LaunchConfiguration('lidar')).title())
     sim = eval(context.perform_substitution(LaunchConfiguration('sim')).title())
@@ -38,6 +39,9 @@ def launch_setup(context: LaunchContext):
             " ",
             "use_drive:=",
             drive,
+            " ",
+            "use_camera:=",
+            camera_type,
             " ",
         ]
     )
@@ -213,10 +217,15 @@ def launch_setup(context: LaunchContext):
         node_robot_state_publisher,
         delayed_joint_broad_spawner,
         delayed_drive_spawner,
-        delayed_position_spawner,
         delayed_infrared_node_spawner,
         delayed_sonar_node_spawner,
     ]
+
+    # position_controllers (pan/tilt) only exist when the default 2DOF camera is used.
+    # With the depth camera (camera_type != 'default') those joints are absent and the
+    # JointGroupPositionController spawner would fail.
+    if camera_type == 'default':
+        nodes += [delayed_position_spawner]
 
     if camera:
         nodes += [delayed_v4l2_camera_node]
@@ -242,6 +251,14 @@ def generate_launch_description():
             "camera",
             default_value="False",
             description="Start with v4l2_camera node (requires v4l2_camera package)",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_type",
+            default_value="depth",
+            description="Camera type: 'default' (2DOF pan/tilt) or 'depth' (Orbbec Astra S). "
+                        "Use 'default' to enable position_controllers for pan/tilt servos.",
         )
     )
     declared_arguments.append(

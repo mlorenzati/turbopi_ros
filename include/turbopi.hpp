@@ -54,6 +54,13 @@ namespace turbopi
              */
 			void setJoint(turbopi::Joint const & joint);
 
+            /**
+             * @brief Get the latest battery voltage from the STM32.
+             *
+             * @return Battery voltage in mV, or -1 if not yet available.
+             */
+            int getBattery();
+
 	};
 }
 

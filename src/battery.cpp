@@ -4,14 +4,18 @@
  *  you may not use this file except in compliance with the License.
  *
  *  Updated for Pi5 / ROS Robot Controller (STM32) board.
- *  Battery voltage is now read from the STM32 via the Board serial class.
+ *  Battery voltage is read from the STM32 via the Board serial class.
+ *
  *  The STM32 firmware periodically broadcasts a SYS packet (sub-cmd 0x04)
  *  containing the battery voltage in millivolts (uint16_t, little-endian).
- *  Board::getBattery() returns that value; we divide by 1000 to get Volts.
+ *  Board::recvTask() stores the latest value in battery_mv_ (atomic<int>).
+ *  Board::getBattery() returns that value (-1 if not yet received).
+ *
+ *  getVoltage() is intentionally non-blocking: it reads whatever battery_mv_
+ *  holds at call-time and returns 0 V when no reading is available yet.
+ *  The battery_node timer fires every 5 s, giving the STM32 plenty of time
+ *  to broadcast the first packet before the first publish.
  */
-
-#include <chrono>
-#include <thread>
 
 #include "rclcpp/rclcpp.hpp"
 
@@ -35,15 +39,7 @@ namespace turbopi
         if (board_ == nullptr)
             return 0.0f;
 
-        // Wait up to 3 seconds for the STM32 to broadcast a battery reading.
-        // The firmware sends SYS packets at ~2 Hz when reception is enabled.
-        int mv = -1;
-        for (int attempt = 0; attempt < 30 && mv < 0; ++attempt)
-        {
-            mv = board_->getBattery();
-            if (mv < 0)
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
+        int mv = board_->getBattery();
 
         if (mv < 0)
         {
