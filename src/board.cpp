@@ -137,16 +137,22 @@ void Board::bufWrite(PacketFunction func, const std::vector<uint8_t> &data)
     if (fd_ < 0)
         return;
 
-    // Frame: 0xAA 0x55 func len data… crc8(func+len+data)
+    // Frame (mirrors Python SDK buf_write):
+    //   0xAA 0x55 <func> <len> [data…] <crc8(func+len+data)>
+    // The Python SDK buf_write does:
+    //   buf = [0xAA, 0x55, int(func)]
+    //   buf.append(len(data))
+    //   buf.extend(data)
+    //   buf.append(checksum_crc8(bytes(buf[2:])))   ← CRC of func+len+data
     std::vector<uint8_t> frame;
     frame.reserve(4 + data.size() + 1);
     frame.push_back(0xAA);
     frame.push_back(0x55);
-    frame.push_back(static_cast<uint8_t>(func));
-    frame.push_back(static_cast<uint8_t>(data.size()));
+    frame.push_back(static_cast<uint8_t>(func));   // byte 2
+    frame.push_back(static_cast<uint8_t>(data.size())); // byte 3
     frame.insert(frame.end(), data.begin(), data.end());
 
-    // CRC covers func, len, and data (i.e. from index 2 onward)
+    // CRC covers func, len, and data (bytes 2 onward)
     uint8_t chk = crc8(frame.data() + 2, frame.size() - 2);
     frame.push_back(chk);
 
@@ -263,17 +269,49 @@ void Board::pwmServoSetPosition(float duration,
 
 void Board::recvTask()
 {
-    // Parser state machine – mirrors Python SDK recv_task()
+    // Parser state machine – exactly mirrors Python SDK recv_task().
+    //
+    // Wire format from STM32 broadcasts:
+    //   0xAA 0x55 <FUNCTION> <LENGTH> <ID> [data…] <crc8(func+len+id+data)>
+    //
+    // Python recv_task state flow (reading actual code transitions, not enum values):
+    //   STARTBYTE1 → STARTBYTE2 → FUNCTION → LENGTH → ID → DATA → CHECKSUM
+    //
+    // Python frame[] = [func, length, id_byte, data...]
+    // CRC = crc8(frame) covers all of frame[].
+    //
+    // The battery SYS packet layout in frame[]:
+    //   frame[0] = func (0x00 = SYS)
+    //   frame[1] = length
+    //   frame[2] = id byte (the "ID" state byte)
+    //   frame[3] = sub-cmd 0x04 (battery)
+    //   frame[4] = mv low byte
+    //   frame[5] = mv high byte
+    // Python get_battery(): data = frame[2:], checks data[0]==0x04 → sub-cmd is frame[2]
+    // So the ID state byte IS the sub-cmd byte (no separate ID byte).
+    // Actually Python recv_task state ID reads one byte into frame.append(dat),
+    // then goes to DATA state for the remaining (length-1) bytes.
+    // data = frame[2:] = [id_byte, ...remaining_data]
+    // get_battery checks data[0]==0x04, so id_byte == 0x04 is the battery sub-cmd.
+    //
+    // Therefore the actual wire format is:
+    //   0xAA 0x55 FUNC LEN sub_cmd [remaining...] CRC
+    // and frame = [func, len, sub_cmd, remaining...]
+    // which is exactly what our original parser produced (LENGTH → DATA reads all bytes).
+    //
+    // The "ID" state in Python just reads the first data byte separately before
+    // transitioning to DATA for remaining bytes — the net result is identical.
+
     enum class State : uint8_t
     {
         START1, START2, FUNCTION, LENGTH, DATA, CHECKSUM
     };
 
-    State      state  = State::START1;
-    uint8_t    func   = 0;
-    uint8_t    length = 0;
+    State      state      = State::START1;
+    uint8_t    func       = 0;
+    uint8_t    length     = 0;
     uint8_t    recv_count = 0;
-    std::vector<uint8_t> frame;
+    std::vector<uint8_t> frame;  // [func, len, sub_cmd/id, data...]
 
     while (true)
     {
@@ -302,7 +340,7 @@ void Board::recvTask()
             case State::FUNCTION:
                 if (byte < static_cast<uint8_t>(PacketFunction::NONE))
                 {
-                    func  = byte;
+                    func = byte;
                     frame.clear();
                     frame.push_back(func);
                     frame.push_back(0); // placeholder for length
@@ -329,25 +367,39 @@ void Board::recvTask()
 
             case State::CHECKSUM:
             {
+                // CRC covers entire frame[] = [func, len, sub_cmd/id, data...]
                 uint8_t expected = crc8(frame.data(), frame.size());
                 if (expected == byte)
                 {
-                    // Dispatch on function
                     PacketFunction pf = static_cast<PacketFunction>(func);
-                    const uint8_t *payload = frame.data() + 2; // skip func+len
+                    // frame[2:] = payload (sub_cmd/id byte + remaining data)
+                    // This matches Python: data = bytes(self.frame[2:])
+                    const uint8_t *payload = frame.data() + 2;
+                    size_t payload_len = frame.size() - 2;
 
-                    if (pf == PacketFunction::SYS && length >= 3 && payload[0] == 0x04)
+                    if (pf == PacketFunction::SYS && payload_len >= 3 && payload[0] == 0x04)
                     {
-                        // Battery: sub-cmd 0x04, then uint16_t LE millivolts
+                        // Battery: SYS sub-cmd 0x04, followed by uint16_t LE millivolts
                         uint16_t mv = static_cast<uint16_t>(payload[1]) |
                                       (static_cast<uint16_t>(payload[2]) << 8);
                         battery_mv_.store(static_cast<int>(mv));
+                        RCLCPP_DEBUG(rclcpp::get_logger(CLASS_NAME),
+                                     "Battery: %u mV", static_cast<unsigned>(mv));
+                    }
+                    else
+                    {
+                        RCLCPP_DEBUG(rclcpp::get_logger(CLASS_NAME),
+                                     "RX func=0x%02X len=%u payload[0]=0x%02X payload_len=%zu",
+                                     func, length,
+                                     payload_len > 0 ? payload[0] : 0xFFu,
+                                     payload_len);
                     }
                 }
                 else
                 {
                     RCLCPP_WARN(rclcpp::get_logger(CLASS_NAME),
-                                "CRC mismatch: got 0x%02X expected 0x%02X", byte, expected);
+                                "CRC mismatch: got 0x%02X expected 0x%02X (func=0x%02X len=%u)",
+                                byte, expected, func, length);
                 }
                 state = State::START1;
                 break;

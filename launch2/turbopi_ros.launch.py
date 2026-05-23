@@ -1,4 +1,5 @@
 import os
+import subprocess
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -9,7 +10,19 @@ from launch.launch_context import LaunchContext
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
-import subprocess
+
+def _mecanum_drive_available() -> bool:
+    """Return True if mecanum_drive_controller plugin is installed on this system."""
+    try:
+        import subprocess as sp
+        result = sp.run(
+            ["ros2", "pkg", "prefix", "mecanum_drive_controller"],
+            capture_output=True, timeout=5,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
 
 def launch_setup(context: LaunchContext):
 
@@ -91,7 +104,18 @@ def launch_setup(context: LaunchContext):
     )
 
     if drive == "mecanum":
-        drive_spawner = mecanum_drive_spawner
+        if _mecanum_drive_available():
+            drive_spawner = mecanum_drive_spawner
+        else:
+            import sys
+            print(
+                "\n[WARNING] drive:=mecanum requested but mecanum_drive_controller is NOT "
+                "installed on this system (not available in your ros2_controllers build).\n"
+                "          Falling back to diff_drive_controller.\n"
+                "          To install: sudo apt install ros-jazzy-mecanum-drive-controller\n",
+                file=sys.stderr,
+            )
+            drive_spawner = diff_drive_spawner
     else:
         drive_spawner = diff_drive_spawner
 

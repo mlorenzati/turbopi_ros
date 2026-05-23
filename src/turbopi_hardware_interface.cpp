@@ -233,9 +233,9 @@ namespace turbopi_hardware_interface
             turbopi_.setJoint(joint);
         }
 
-        // Publish battery mV every ~5 s (250 cycles at 50 Hz) so battery_node
+        // Publish battery mV every ~5 s (50 cycles at 10 Hz) so battery_node
         // can subscribe instead of opening /dev/rrc in a separate process.
-        if (battery_pub_ && (++battery_pub_counter_ >= 250))
+        if (battery_pub_ && (++battery_pub_counter_ >= 50))
         {
             battery_pub_counter_ = 0;
             int mv = turbopi_.getBattery();
