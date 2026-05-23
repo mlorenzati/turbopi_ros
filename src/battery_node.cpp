@@ -21,10 +21,10 @@ namespace turbopi
         : Node("battery", options)
     {
         // Board opens /dev/rrc and starts the background receive thread
-        static auto board = Board();
+        static Board board;
         board.enableReception(true);
 
-        static auto battery = Battery(board);
+        static Battery battery(board);
         battery_ = &battery;
 
         // publish to /battery topic

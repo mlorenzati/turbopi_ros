@@ -19,7 +19,7 @@ namespace turbopi
 	TurboPi::TurboPi()
 	{
         // Single shared Board instance – opens /dev/rrc at 1 Mbaud
-        static auto board_ = Board();
+        static Board board_;
         board_.enableReception(true);
 
 		//base – motors 1-4

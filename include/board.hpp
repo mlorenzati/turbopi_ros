@@ -65,6 +65,12 @@ namespace turbopi
          */
         ~Board();
 
+        // Non-copyable, non-movable (owns a thread and atomic state)
+        Board(const Board &)            = delete;
+        Board &operator=(const Board &) = delete;
+        Board(Board &&)                 = delete;
+        Board &operator=(Board &&)      = delete;
+
         // ── Motor control ─────────────────────────────────────────────────────
 
         /**
