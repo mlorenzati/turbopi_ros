@@ -18,6 +18,7 @@ def launch_setup(context: LaunchContext):
     filename = 'turbopi.urdf.xacro'
 
     pkg_path = os.path.join(get_package_share_directory(pkg_name))
+    camera = eval(context.perform_substitution(LaunchConfiguration('camera')).title())
     drive = context.perform_substitution(LaunchConfiguration('drive'))
     lidar = eval(context.perform_substitution(LaunchConfiguration('lidar')).title())
     sim = eval(context.perform_substitution(LaunchConfiguration('sim')).title())
@@ -215,8 +216,10 @@ def launch_setup(context: LaunchContext):
         delayed_position_spawner,
         delayed_infrared_node_spawner,
         delayed_sonar_node_spawner,
-        delayed_v4l2_camera_node,
     ]
+
+    if camera:
+        nodes += [delayed_v4l2_camera_node]
 
     if lidar:
         nodes += [
@@ -234,6 +237,13 @@ def stop_lidar(context: LaunchContext):
 def generate_launch_description():
     # Declare arguments
     declared_arguments = []
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera",
+            default_value="False",
+            description="Start with v4l2_camera node (requires v4l2_camera package)",
+        )
+    )
     declared_arguments.append(
         DeclareLaunchArgument(
             "drive",
