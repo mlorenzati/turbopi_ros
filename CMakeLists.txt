@@ -82,6 +82,7 @@ add_executable(test_sonar           src/tests/test_sonar.cpp)
 # ── ROS 2 dependencies ─────────────────────────────────────────────────────────
 ament_target_dependencies(battery_monitor_node      ${INCLUDE_DEPENDS})
 ament_target_dependencies(board                     ${INCLUDE_DEPENDS})
+ament_target_dependencies(i2c                       ${INCLUDE_DEPENDS})
 ament_target_dependencies(teleop_turbopi            ${INCLUDE_DEPENDS})
 ament_target_dependencies(turbopi_hardware_interface ${INCLUDE_DEPENDS})
 
