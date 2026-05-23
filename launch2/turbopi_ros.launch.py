@@ -4,7 +4,7 @@ import subprocess
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, LogInfo, OpaqueFunction, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, LogInfo, OpaqueFunction, RegisterEventHandler, TimerAction
 from launch.event_handlers import OnProcessExit, OnProcessStart, OnShutdown
 from launch.launch_context import LaunchContext
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
@@ -157,6 +157,23 @@ def launch_setup(context: LaunchContext):
         parameters=[],
     )
 
+    # RPLidar driver node – publishes /scan topic and provides /start_motor + /stop_motor services
+    rplidar_node = Node(
+        package='rplidar_ros',
+        executable='rplidar_node',
+        name='rplidar_node',
+        output='screen',
+        parameters=[{
+            'serial_port': '/dev/rplidar',
+            'serial_baudrate': 115200,
+            'frame_id': 'lidar_link',
+            'inverted': False,
+            'angle_compensate': True,
+            'scan_mode': 'Standard',
+        }],
+    )
+
+    # After the rplidar_node is running, call /start_motor to spin up the motor
     start_lidar = ExecuteProcess(
         cmd=[
             [
@@ -197,10 +214,21 @@ def launch_setup(context: LaunchContext):
         )
     )
 
-    delayed_slam_toolbox_node_spawner = RegisterEventHandler(
+    # When joint_state_broadcaster is loaded, start the rplidar driver
+    delayed_rplidar_spawner = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=joint_broad_spawner,
-            on_exit=[start_lidar, slam_toolbox_node],
+            on_exit=[rplidar_node],
+        )
+    )
+
+    # Give rplidar_node 3 s to start, then call /start_motor and launch slam_toolbox
+    delayed_slam_toolbox_node_spawner = RegisterEventHandler(
+        event_handler=OnProcessStart(
+            target_action=rplidar_node,
+            on_start=[
+                TimerAction(period=3.0, actions=[start_lidar, slam_toolbox_node]),
+            ],
         )
     )
 
@@ -225,13 +253,13 @@ def launch_setup(context: LaunchContext):
         )
     )
 
+    # Stop the lidar motor on shutdown.  Use OnShutdown so it fires when the
+    # user presses Ctrl-C, not just when slam_toolbox exits on its own.
     stop_lidar_on_shutdown = RegisterEventHandler(
-        event_handler=OnProcessExit(
-            target_action=slam_toolbox_node,
-            on_exit=[
-                LogInfo(msg='Stopping lidar'),
+        event_handler=OnShutdown(
+            on_shutdown=[
+                LogInfo(msg='Stopping lidar motor...'),
                 OpaqueFunction(function=stop_lidar),
-                LogInfo(msg='Stopped lidar'),
             ],
         )
     )
@@ -258,6 +286,7 @@ def launch_setup(context: LaunchContext):
 
     if lidar:
         nodes += [
+            delayed_rplidar_spawner,
             delayed_slam_toolbox_node_spawner,
             stop_lidar_on_shutdown,
         ]
@@ -266,7 +295,16 @@ def launch_setup(context: LaunchContext):
 
 
 def stop_lidar(context: LaunchContext):
-    subprocess.run("ros2 service call /stop_motor std_srvs/srv/Empty", shell=True)
+    # Use a 5-second timeout so shutdown cannot hang indefinitely if
+    # rplidar_node is already gone (service no longer available).
+    try:
+        subprocess.run(
+            "ros2 service call /stop_motor std_srvs/srv/Empty",
+            shell=True,
+            timeout=5,
+        )
+    except subprocess.TimeoutExpired:
+        pass
 
 
 def generate_launch_description():
