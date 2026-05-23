@@ -1,5 +1,0 @@
-# Hiwonder ROS Robot Controller (STM32 co-processor)
-# Creates /dev/rrc symlink for the ttyACM0 device and
-# prevents ModemManager from hijacking the port.
-KERNEL=="ttyACM*", SUBSYSTEM=="tty", GROUP="users", MODE="0777", SYMLINK+="rrc"
-ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", ENV{ID_MM_PORT_IGNORE}="1"

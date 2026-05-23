@@ -55,6 +55,87 @@ and allows usage of RViz2 on a remote system, while running on actual hardware.
 Download and unpack or clone this repositories contents into your ros2
 workspace; ex `/opt/ros_ws/src/turbopi_ros`.
 
+## System Setup (outside of colcon build)
+
+The following steps are required **once** on the Raspberry Pi 5 before running
+the robot. They configure the operating system so that the hardware can be
+accessed correctly.
+
+### 1. Enable GPIO UART for the ROS Robot Controller (STM32)
+
+The Hiwonder ROS Robot Controller expansion board communicates with the Pi 5
+via the **40-pin GPIO header UART** (not USB). This UART must be enabled in the
+Pi 5 boot configuration.
+
+Add the following line to `/boot/firmware/config.txt`:
+
+```
+dtoverlay=uart0-pi5
+```
+
+Or run:
+
+```bash
+echo "" | sudo tee -a /boot/firmware/config.txt
+echo "# Enable GPIO UART for ROS Robot Controller (STM32) expansion board" | sudo tee -a /boot/firmware/config.txt
+echo "dtoverlay=uart0-pi5" | sudo tee -a /boot/firmware/config.txt
+```
+
+A **reboot is required** after this change. Once rebooted, the UART appears as
+`/dev/ttyAMA10`.
+
+### 2. Install the udev rule to create /dev/rrc
+
+The Board driver opens `/dev/rrc` — a symlink created by a udev rule. Install
+it with the provided script (run from the workspace `src/turbopi_ros` directory):
+
+```bash
+sudo cp etc/udev/99-ttyAMA-rrc.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+Or use the convenience script:
+
+```bash
+sudo bash etc/udev/install_udev_rules.sh
+```
+
+After reboot, verify the symlink exists:
+
+```bash
+ls -la /dev/rrc
+# Expected: lrwxrwxrwx ... /dev/rrc -> ttyAMA10
+```
+
+### 3. Add user to dialout group
+
+The serial port `/dev/ttyAMA10` requires the user to be in the `dialout` group:
+
+```bash
+sudo usermod -aG dialout $USER
+# log out and back in (or reboot) for the group change to take effect
+```
+
+### 4. RPLidar (ttyUSB0)
+
+The RPLidar A1 connects via USB and appears as `/dev/ttyUSB0` (Silicon Labs
+CP210x UART bridge). No additional configuration is needed beyond ensuring the
+user is in the `dialout` group (step 3 above).
+
+### Automated setup
+
+If setting up a fresh Pi 5, the `rpi5-ubuntu-jammy-setup.sh` script at the root
+of this repository performs all of the above steps automatically (including
+installing ROS 2 Jazzy, cloning the workspace, and building):
+
+```bash
+sudo bash rpi5-ubuntu-jammy-setup.sh
+sudo reboot
+```
+
+---
+
 ## Build and Install
 
 Building is done using colcon which will invoke cmake and run the necessary
@@ -103,13 +184,12 @@ Start a simulated TurboPi in Gazebo; run in container or desktop/laptop.
 Start the Nav 2 stack, used with both hardware and simulation.
 - [turbopi_ros.launch.py](https://github.com/wltjr/turbopi_ros/blob/main/launch2/turbopi_ros.launch.py) -
 Start ROS 2 with hardware support for TurboPi on robot hardware, following
-optional arguments (default `False`).
+optional arguments (all default `False` unless noted).
+  - `camera:=True` - Enable the v4l2 camera node (requires `v4l2_camera` package
+    and a compatible USB camera on `/dev/video0`).
   - `drive:=mecanum` - Drive system diff or mecanum (default `diff`).
-  - `lidar:=True` - Enable optional hardware lidar support (RPLidar)
-  - `sim:=True` - Use simulated hardware
-
-  Note: This must be run as the `root` user, udev rules for other users are not
-  working at this time; a I2C/SMBus issue.
+  - `lidar:=True` - Enable optional hardware lidar support (RPLidar on `/dev/ttyUSB0`).
+  - `sim:=True` - Use simulated mock hardware (skips all serial/I2C access).
 
 ### Docker Containers
 

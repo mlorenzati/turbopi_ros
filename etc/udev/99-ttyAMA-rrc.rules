@@ -1,0 +1,8 @@
+# Hiwonder ROS Robot Controller (STM32 co-processor) via GPIO UART
+# On Raspberry Pi 5 the expansion board connects via the 40-pin header UART
+# which appears as ttyAMA10.  This rule creates the /dev/rrc symlink.
+#
+# Requires UART to be enabled in /boot/firmware/config.txt:
+#   dtoverlay=uart0-pi5
+# (see etc/udev/install_udev_rules.sh for the full setup procedure)
+KERNEL=="ttyAMA10", SUBSYSTEM=="tty", GROUP="dialout", MODE="0660", SYMLINK+="rrc"
