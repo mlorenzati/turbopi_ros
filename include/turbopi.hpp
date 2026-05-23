@@ -2,6 +2,8 @@
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
+ *
+ *  Updated for Pi5 / ROS Robot Controller (STM32) board.
  */
 
 #ifndef TURBOPI__TURBOPI_H
@@ -9,7 +11,7 @@
 
 #include <sstream>
 
-#include "i2c.hpp"
+#include "board.hpp"
 #include "segment.hpp"
 
 extern char const* const CLASS_NAME;
@@ -27,7 +29,7 @@ namespace turbopi
 
             /**
              * @brief Construct a new Robot object and initializes all joints,
-             *        sensors, etc
+             *        sensors, etc.  Opens /dev/rrc (Pi5 STM32 board).
              */
 			TurboPi();
 
@@ -46,7 +48,7 @@ namespace turbopi
 			Joint getJoint(std::string const & name);
 
             /**
-             * @brief Get a Joint object by name
+             * @brief Set a Joint object by name
              *
              * @param joint a Joint object
              */

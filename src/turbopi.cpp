@@ -2,6 +2,9 @@
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
+ *
+ *  Updated for Pi5 / ROS Robot Controller (STM32) board.
+ *  Uses Board (serial UART) instead of I2C for motor and servo control.
  */
 
 #include <stdexcept>
@@ -15,24 +18,26 @@ namespace turbopi
 {
 	TurboPi::TurboPi()
 	{
-        static auto i2c_ = I2C(1, BASE_SLAVE_ADDRESS);
+        // Single shared Board instance – opens /dev/rrc at 1 Mbaud
+        static auto board_ = Board();
+        board_.enableReception(true);
 
-		//base
-		base.joints[0] = Joint(1, TYPE_MOTOR, i2c_);
+		//base – motors 1-4
+		base.joints[0] = Joint(1, TYPE_MOTOR, board_);
 		base.joints[0].name = "front_left_wheel_joint";
-		base.joints[1] = Joint(2, TYPE_MOTOR, i2c_);
+		base.joints[1] = Joint(2, TYPE_MOTOR, board_);
 		base.joints[1].name = "front_right_wheel_joint";
-		base.joints[2] = Joint(3, TYPE_MOTOR, i2c_);
+		base.joints[2] = Joint(3, TYPE_MOTOR, board_);
 		base.joints[2].name = "rear_left_wheel_joint";
-		base.joints[3] = Joint(4, TYPE_MOTOR, i2c_);
+		base.joints[3] = Joint(4, TYPE_MOTOR, board_);
 		base.joints[3].name = "rear_right_wheel_joint";
 
-		//camera
-		camera.joints[0] = Joint(5, TYPE_SERVO, i2c_);
+		//camera – PWM servos (board ids 1 and 2, mapped from joint ids 5 and 6)
+		camera.joints[0] = Joint(5, TYPE_SERVO, board_);
 		camera.joints[0].name = "camera_joint";
 		camera.joints[0].sensorResolution = 128;
 		camera.joints[0].setLimits(0, 115);
-		camera.joints[1] = Joint(6, TYPE_SERVO, i2c_);
+		camera.joints[1] = Joint(6, TYPE_SERVO, board_);
 		camera.joints[1].name = "camera_frame_joint";
 		camera.joints[1].sensorResolution = 128;
 		camera.joints[1].setLimits(0, 180);

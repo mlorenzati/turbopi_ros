@@ -2,6 +2,12 @@
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
+ *
+ *  Updated for Pi5 / ROS Robot Controller (STM32) board.
+ *  Battery voltage is now read from the STM32 via the Board serial class.
+ *  The STM32 firmware periodically broadcasts a SYS packet (sub-cmd 0x04)
+ *  containing the battery voltage in millivolts (uint16_t, little-endian).
+ *  Board::getBattery() returns that value; we divide by 1000 to get Volts.
  */
 
 #include <chrono>
@@ -10,55 +16,43 @@
 #include "rclcpp/rclcpp.hpp"
 
 #include "battery.hpp"
+
 char const* const CLASS_NAME = "Battery";
 
 namespace turbopi
 {
     Battery::Battery() = default;
- 
-    Battery::Battery(uint8_t i2c_dev, uint8_t i2c_address) :
-        i2c_address_(i2c_address)
+
+    Battery::Battery(Board &board) :
+        board_(&board)
     {
-        static auto i2c = I2C(i2c_dev, i2c_address_);
-        i2c_ = &i2c;
     }
 
     Battery::~Battery() = default;
 
     float Battery::getVoltage()
     {
-        float voltages = 0;
-        std::time_t previous = 0;
-        std::vector<uint8_t> data = {0, 255};
+        if (board_ == nullptr)
+            return 0.0f;
 
-        // take avg of 3 readings
-        for (int count = 0; count < 3;)
+        // Wait up to 3 seconds for the STM32 to broadcast a battery reading.
+        // The firmware sends SYS packets at ~2 Hz when reception is enabled.
+        int mv = -1;
+        for (int attempt = 0; attempt < 30 && mv < 0; ++attempt)
         {
-            if (std::time_t now = std::chrono::system_clock::to_time_t(
-                    std::chrono::system_clock::now());
-                std::difftime(now, previous) < 1)
-            {
+            mv = board_->getBattery();
+            if (mv < 0)
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                continue;
-            }
-
-            previous = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + 1;
-
-            while (data[1] == 255)
-            {
-                if (!i2c_->readBytes(0, 2, data))
-                {
-                    data[0] = 0;
-                    data[1] = 0;
-                }
-            }
-
-            voltages += (float)((data[1] << 8) | data[0]);
-            count++;
         }
 
-        // return avg of 3 / 1000
-        return voltages/3000.0;
+        if (mv < 0)
+        {
+            RCLCPP_WARN(rclcpp::get_logger(CLASS_NAME),
+                        "Battery voltage not yet available from STM32");
+            return 0.0f;
+        }
+
+        return static_cast<float>(mv) / 1000.0f;
     }
 
 }

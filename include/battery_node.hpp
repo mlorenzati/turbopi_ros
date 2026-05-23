@@ -11,6 +11,8 @@
 #include "rclcpp/node_options.hpp"
 #include "sensor_msgs/msg/battery_state.hpp"
 
+#include "battery.hpp"
+
 namespace turbopi
 {
     /**
