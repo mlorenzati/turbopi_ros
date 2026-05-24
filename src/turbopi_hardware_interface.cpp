@@ -28,8 +28,8 @@
 
 #include "pluginlib/class_list_macros.hpp"
 
-// Logger name for this hardware interface plugin
-static char const* const CLASS_NAME = "TurboPiSystemHardware";
+// Logger name for this hardware interface plugin (matches extern declaration in turbopi.hpp)
+char const* const CLASS_NAME = "TurboPiSystemHardware";
 PLUGINLIB_EXPORT_CLASS(turbopi_hardware_interface::TurboPiSystemHardware,
                        hardware_interface::SystemInterface)
 
