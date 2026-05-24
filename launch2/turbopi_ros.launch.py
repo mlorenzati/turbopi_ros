@@ -67,7 +67,7 @@ def launch_setup(context: LaunchContext):
         executable='ros2_control_node',
         parameters=[robot_description, controller_params],
         output='both',
-        arguments=['--ros-args', '--log-level', 'Board:=debug'] if debug else [],
+        ros_arguments=['--log-level', 'Board:=debug'] if debug else [],
     )
 
     node_robot_state_publisher = Node(
