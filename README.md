@@ -117,11 +117,30 @@ sudo usermod -aG dialout $USER
 # log out and back in (or reboot) for the group change to take effect
 ```
 
-### 4. RPLidar (ttyUSB0)
+### 4. RPLidar — install udev rule for /dev/rplidar
 
-The RPLidar A1 connects via USB and appears as `/dev/ttyUSB0` (Silicon Labs
-CP210x UART bridge). No additional configuration is needed beyond ensuring the
-user is in the `dialout` group (step 3 above).
+The RPLidar A1 connects via USB using a Silicon Labs CP210x (CP2102) UART
+bridge (`idVendor=10c4 idProduct=ea60`). The `install_udev_rules.sh` script
+(step 2) also installs `99-rplidar.rules`, which creates the `/dev/rplidar`
+symlink automatically when the lidar is plugged in.
+
+If you installed the rules before this symlink rule was added, re-run the
+install script:
+
+```bash
+sudo bash etc/udev/install_udev_rules.sh
+```
+
+Verify after plugging in the lidar:
+
+```bash
+ls -la /dev/rplidar
+# Expected: lrwxrwxrwx ... /dev/rplidar -> ttyUSB0
+```
+
+If your unit uses a CH340 chip instead of CP2102 (verify with
+`udevadm info -a -n /dev/ttyUSB0 | grep -E 'idVendor|idProduct'`), edit
+`etc/udev/99-rplidar.rules` to use `idVendor="1a86" idProduct="7523"`.
 
 ### Automated setup
 
@@ -192,7 +211,7 @@ optional arguments (all default `False` unless noted).
     the `position_controllers` for the pan/tilt servos. With `depth` the
     position controller spawner is skipped entirely (the joints don't exist).
   - `drive:=mecanum` - Drive system diff or mecanum (default `diff`).
-  - `lidar:=True` - Enable optional hardware lidar support (RPLidar on `/dev/ttyUSB0`).
+  - `lidar:=True` - Enable optional hardware lidar support (RPLidar on `/dev/rplidar` udev symlink). Override port with `lidar_port:=/dev/ttyUSB0`.
   - `sim:=True` - Use simulated mock hardware (skips all serial/I2C access).
 
 ### Docker Containers
@@ -234,25 +253,31 @@ ros2 launch turbopi_ros gamepad.launch.py
 
 #### Button Layout
 
-The primary buttons are the left joystick for driving/movement and the right
-joystick for the attached camera. All other buttons are not mapped or in use
-at this time.
+The left joystick controls driving and the right joystick controls the camera.
+There is **no deadman button** — any stick movement immediately sends velocity
+commands to the robot.
+
+> ⚠️ **WARNING:** The **SHARE** button executes `sudo init 0` — it
+> **shuts down the Raspberry Pi immediately**. Do not press it accidentally.
 
 <img align="left" alt="Drawing of DUALSHOCK™4" src="https://manuals.playstation.net/document/imgps4/other_basic_018.jpg" />
 
-| Button | Action |
+| Control | Action |
 | ------------- | ------------- |
-| A | Unused  |
-| B | Unused  |
-| C | Unused  |
-| D | Unused  |
-| E | Unused  |
-| F | Unused  |
-| G | Unused  |
-| H | Camera - tilt up/down, pan left/right |
-| I | Unused  |
-| J | Unused  |
-| K | Driving - forward/backward, turn left/right |
+| Left stick Y (up/down) | Drive forward / backward |
+| Left stick X (left/right) | Rotate left / rotate right |
+| Right stick Y | Camera tilt up / down |
+| Right stick X | Camera pan left / right |
+| SHARE button ⚠️ | **Shuts down the Raspberry Pi** (`sudo init 0`) |
+| All other buttons | Unused |
+
+> **Note:** Camera pan/tilt controls only work when launched with
+> `camera_type:=default` (2DOF pan/tilt servo camera). With the depth camera
+> (`camera_type:=depth`, the default) those joints do not exist.
+>
+> **Note:** Left stick X maps to `angular.z` (rotation), not lateral strafe.
+> True mecanum sideways movement from the gamepad would require remapping
+> right stick X to `twist.linear.y`.
 
 ### Alternatives
 
