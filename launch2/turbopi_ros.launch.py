@@ -1,11 +1,10 @@
 import os
-import subprocess
 
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction, RegisterEventHandler, TimerAction
-from launch.event_handlers import OnProcessExit, OnProcessStart, OnShutdown
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, TimerAction
+from launch.event_handlers import OnProcessExit, OnProcessStart
 from launch.launch_context import LaunchContext
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -247,17 +246,6 @@ def launch_setup(context: LaunchContext):
         )
     )
 
-    # Stop the lidar motor on shutdown.  Use OnShutdown so it fires when the
-    # user presses Ctrl-C, not just when slam_toolbox exits on its own.
-    stop_lidar_on_shutdown = RegisterEventHandler(
-        event_handler=OnShutdown(
-            on_shutdown=[
-                LogInfo(msg='Stopping lidar motor...'),
-                OpaqueFunction(function=stop_lidar),
-            ],
-        )
-    )
-
     nodes = [
         battery_monitor_node,
         battery_node,
@@ -282,23 +270,9 @@ def launch_setup(context: LaunchContext):
         nodes += [
             delayed_rplidar_spawner,
             delayed_slam_toolbox_node_spawner,
-            stop_lidar_on_shutdown,
         ]
 
     return nodes
-
-
-def stop_lidar(context: LaunchContext):
-    # Use a 5-second timeout so shutdown cannot hang indefinitely if
-    # rplidar_node is already gone (service no longer available).
-    try:
-        subprocess.run(
-            "ros2 service call /stop_motor std_srvs/srv/Empty",
-            shell=True,
-            timeout=5,
-        )
-    except subprocess.TimeoutExpired:
-        pass
 
 
 def generate_launch_description():
