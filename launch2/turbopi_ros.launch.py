@@ -4,7 +4,7 @@ import subprocess
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, LogInfo, OpaqueFunction, RegisterEventHandler, TimerAction
+from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction, RegisterEventHandler, TimerAction
 from launch.event_handlers import OnProcessExit, OnProcessStart, OnShutdown
 from launch.launch_context import LaunchContext
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
@@ -175,18 +175,9 @@ def launch_setup(context: LaunchContext):
         }],
     )
 
-    # After the rplidar_node is running, call /start_motor to spin up the motor
-    start_lidar = ExecuteProcess(
-        cmd=[
-            [
-                FindExecutable(name="ros2"),
-                " service call ",
-                "/start_motor ",
-                "std_srvs/srv/Empty",
-            ]
-        ],
-        shell=True,
-    )
+    # NOTE: rplidar_node auto-starts the motor on init.
+    # The /start_motor service call is NOT needed and actually causes
+    # a Stop→Start cycle that interrupts scanning.
 
     v4l2_camera_node = Node(
         package='v4l2_camera',
@@ -224,12 +215,13 @@ def launch_setup(context: LaunchContext):
         )
     )
 
-    # Give rplidar_node 3 s to start, then call /start_motor and launch slam_toolbox
+    # Give rplidar_node 3 s to fully initialise, then start slam_toolbox.
+    # No /start_motor call needed – rplidar_node auto-starts the motor on init.
     delayed_slam_toolbox_node_spawner = RegisterEventHandler(
         event_handler=OnProcessStart(
             target_action=rplidar_node,
             on_start=[
-                TimerAction(period=3.0, actions=[start_lidar, slam_toolbox_node]),
+                TimerAction(period=3.0, actions=[slam_toolbox_node]),
             ],
         )
     )

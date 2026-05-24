@@ -269,49 +269,37 @@ void Board::pwmServoSetPosition(float duration,
 
 void Board::recvTask()
 {
-    // Parser state machine – exactly mirrors Python SDK recv_task().
+    // Parser state machine – mirrors Python SDK recv_task() EXACTLY.
     //
-    // Wire format from STM32 broadcasts:
-    //   0xAA 0x55 <FUNCTION> <LENGTH> <ID> [data…] <crc8(func+len+id+data)>
+    // Actual wire format from STM32 (from Python SDK PacketControllerState enum):
+    //   0xAA 0x55 <LENGTH> <FUNCTION> <data[0]> <data[1]...> <crc8>
     //
-    // Python recv_task state flow (reading actual code transitions, not enum values):
-    //   STARTBYTE1 → STARTBYTE2 → FUNCTION → LENGTH → ID → DATA → CHECKSUM
+    // Note: LENGTH comes BEFORE FUNCTION in the wire format!
+    // Python state order: STARTBYTE1 → STARTBYTE2 → LENGTH → FUNCTION → DATA → CHECKSUM
     //
-    // Python frame[] = [func, length, id_byte, data...]
-    // CRC = crc8(frame) covers all of frame[].
+    // Python frame[] = [func, length, data...]
+    //   frame[0] = func byte
+    //   frame[1] = length byte
+    //   frame[2..] = data bytes (all LENGTH bytes, including sub-cmd)
     //
-    // The battery SYS packet layout in frame[]:
-    //   frame[0] = func (0x00 = SYS)
-    //   frame[1] = length
-    //   frame[2] = id byte (the "ID" state byte)
-    //   frame[3] = sub-cmd 0x04 (battery)
-    //   frame[4] = mv low byte
-    //   frame[5] = mv high byte
-    // Python get_battery(): data = frame[2:], checks data[0]==0x04 → sub-cmd is frame[2]
-    // So the ID state byte IS the sub-cmd byte (no separate ID byte).
-    // Actually Python recv_task state ID reads one byte into frame.append(dat),
-    // then goes to DATA state for the remaining (length-1) bytes.
-    // data = frame[2:] = [id_byte, ...remaining_data]
-    // get_battery checks data[0]==0x04, so id_byte == 0x04 is the battery sub-cmd.
+    // CRC = crc8(frame) covers [func, len, data...]
     //
-    // Therefore the actual wire format is:
-    //   0xAA 0x55 FUNC LEN sub_cmd [remaining...] CRC
-    // and frame = [func, len, sub_cmd, remaining...]
-    // which is exactly what our original parser produced (LENGTH → DATA reads all bytes).
-    //
-    // The "ID" state in Python just reads the first data byte separately before
-    // transitioning to DATA for remaining bytes — the net result is identical.
+    // Battery SYS packet (func=0x00, sub-cmd=0x04):
+    //   Wire: 0xAA 0x55 <len=3> <func=0x00> <0x04> <mv_lo> <mv_hi> <crc>
+    //   frame = [0x00, 3, 0x04, mv_lo, mv_hi]
+    //   data = frame[2:] = [0x04, mv_lo, mv_hi]
+    //   data[0] == 0x04 → battery packet
 
     enum class State : uint8_t
     {
-        START1, START2, FUNCTION, LENGTH, DATA, CHECKSUM
+        START1, START2, LENGTH, FUNCTION, DATA, CHECKSUM
     };
 
     State      state      = State::START1;
     uint8_t    func       = 0;
     uint8_t    length     = 0;
     uint8_t    recv_count = 0;
-    std::vector<uint8_t> frame;  // [func, len, sub_cmd/id, data...]
+    std::vector<uint8_t> frame;  // [func, len, data...]
 
     while (true)
     {
@@ -334,7 +322,13 @@ void Board::recvTask()
                 break;
 
             case State::START2:
-                state = (byte == 0x55) ? State::FUNCTION : State::START1;
+                state = (byte == 0x55) ? State::LENGTH : State::START1;
+                break;
+
+            case State::LENGTH:
+                length = byte;
+                recv_count = 0;
+                state = State::FUNCTION;
                 break;
 
             case State::FUNCTION:
@@ -342,21 +336,14 @@ void Board::recvTask()
                 {
                     func = byte;
                     frame.clear();
-                    frame.push_back(func);
-                    frame.push_back(0); // placeholder for length
-                    state = State::LENGTH;
+                    frame.push_back(func);   // frame[0] = func
+                    frame.push_back(length); // frame[1] = length
+                    state = (length == 0) ? State::CHECKSUM : State::DATA;
                 }
                 else
                 {
                     state = State::START1;
                 }
-                break;
-
-            case State::LENGTH:
-                length = byte;
-                frame[1] = length;
-                recv_count = 0;
-                state = (length == 0) ? State::CHECKSUM : State::DATA;
                 break;
 
             case State::DATA:
@@ -367,13 +354,13 @@ void Board::recvTask()
 
             case State::CHECKSUM:
             {
-                // CRC covers entire frame[] = [func, len, sub_cmd/id, data...]
+                // CRC covers entire frame[] = [func, len, data...]
                 uint8_t expected = crc8(frame.data(), frame.size());
                 if (expected == byte)
                 {
                     PacketFunction pf = static_cast<PacketFunction>(func);
-                    // frame[2:] = payload (sub_cmd/id byte + remaining data)
-                    // This matches Python: data = bytes(self.frame[2:])
+                    // frame[2:] = payload data bytes
+                    // Matches Python: data = bytes(self.frame[2:])
                     const uint8_t *payload = frame.data() + 2;
                     size_t payload_len = frame.size() - 2;
 
