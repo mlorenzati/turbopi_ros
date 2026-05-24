@@ -35,8 +35,6 @@
 
 #include "turbopi.hpp"
 
-char const* const CLASS_NAME = "TurboPiSystemHardware";
-
 namespace turbopi_hardware_interface
 {
     class TurboPiSystemHardware : public hardware_interface::SystemInterface

@@ -7,8 +7,8 @@
  *  Speaks the 0xAA 0x55 serial protocol to the STM32 co-processor.
  */
 
+#include <cerrno>
 #include <cstring>
-#include <errno.h>
 #include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -302,7 +302,7 @@ void Board::recvTask()
     uint8_t    recv_count = 0;
     std::vector<uint8_t> frame;  // [func, len, data...]
 
-    while (true)
+    while (enable_recv_.load() || fd_ >= 0)
     {
         if (!enable_recv_.load())
         {

@@ -27,6 +27,9 @@
 #include "turbopi.hpp"
 
 #include "pluginlib/class_list_macros.hpp"
+
+// Logger name for this hardware interface plugin
+static char const* const CLASS_NAME = "TurboPiSystemHardware";
 PLUGINLIB_EXPORT_CLASS(turbopi_hardware_interface::TurboPiSystemHardware,
                        hardware_interface::SystemInterface)
 
@@ -173,7 +176,7 @@ namespace turbopi_hardware_interface
     {
         RCLCPP_INFO(rclcpp::get_logger(CLASS_NAME), "Activating ...please wait...");
 
-        for (auto i = 0; i < hw_start_sec_; i++)
+        for (int i = 0; i < static_cast<int>(hw_start_sec_); i++)
         {
             rclcpp::sleep_for(std::chrono::seconds(1));
             RCLCPP_INFO(rclcpp::get_logger(CLASS_NAME),
@@ -201,7 +204,7 @@ namespace turbopi_hardware_interface
     {
         RCLCPP_INFO(rclcpp::get_logger(CLASS_NAME), "Deactivating ...please wait...");
 
-        for (auto i = 0; i < hw_stop_sec_; i++)
+        for (int i = 0; i < static_cast<int>(hw_stop_sec_); i++)
         {
             rclcpp::sleep_for(std::chrono::seconds(1));
             RCLCPP_INFO(rclcpp::get_logger(CLASS_NAME),
@@ -259,7 +262,7 @@ namespace turbopi_hardware_interface
     {
         for (auto i = 0u; i < info_.joints.size(); i++)
         {
-            uint8_t duration = 1;
+            const uint8_t duration = 1;
 
             turbopi::Joint joint = turbopi_.getJoint(info_.joints[i].name);
 
