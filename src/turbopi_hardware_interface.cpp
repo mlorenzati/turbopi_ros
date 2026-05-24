@@ -241,9 +241,13 @@ namespace turbopi_hardware_interface
         {
             battery_pub_counter_ = 0;
             int mv = turbopi_.getBattery();
+            RCLCPP_INFO(rclcpp::get_logger(CLASS_NAME),
+                        "Battery read: %d mV", mv);
             auto msg = std_msgs::msg::Int32();
             msg.data = mv;
             battery_pub_->publish(msg);
+            // spin_some lets the DDS middleware process subscriber-matching events
+            // so that transient-local late-joiners (battery_node) receive the retained value.
             rclcpp::spin_some(battery_node_);
         }
 

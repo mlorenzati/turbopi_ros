@@ -269,30 +269,31 @@ void Board::pwmServoSetPosition(float duration,
 
 void Board::recvTask()
 {
-    // Parser state machine – mirrors Python SDK recv_task() EXACTLY.
+    // Parser state machine – mirrors canonical Python SDK recv_task() in
+    // turbopi_ros2_pi5/src/driver/sdk/sdk/ros_robot_controller_sdk.py EXACTLY.
     //
-    // Actual wire format from STM32 (from Python SDK PacketControllerState enum):
-    //   0xAA 0x55 <LENGTH> <FUNCTION> <data[0]> <data[1]...> <crc8>
+    // Wire format from STM32:
+    //   0xAA 0x55 <FUNCTION> <LENGTH> <data[0..LENGTH-1]> <crc8>
     //
-    // Note: LENGTH comes BEFORE FUNCTION in the wire format!
-    // Python state order: STARTBYTE1 → STARTBYTE2 → LENGTH → FUNCTION → DATA → CHECKSUM
+    // State order: STARTBYTE1 → STARTBYTE2 → FUNCTION → LENGTH → DATA → CHECKSUM
+    //   (after STARTBYTE2 → FUNCTION state; after FUNCTION → LENGTH state)
     //
-    // Python frame[] = [func, length, data...]
-    //   frame[0] = func byte
-    //   frame[1] = length byte
-    //   frame[2..] = data bytes (all LENGTH bytes, including sub-cmd)
+    // Python frame[] = [func, len, data...]
+    //   frame[0] = func byte  (set when FUNCTION state fires)
+    //   frame[1] = len byte   (set when LENGTH state fires)
+    //   frame[2..] = data bytes (LENGTH bytes total)
     //
     // CRC = crc8(frame) covers [func, len, data...]
     //
     // Battery SYS packet (func=0x00, sub-cmd=0x04):
-    //   Wire: 0xAA 0x55 <len=3> <func=0x00> <0x04> <mv_lo> <mv_hi> <crc>
+    //   Wire: 0xAA 0x55 <func=0x00> <len=3> <0x04> <mv_lo> <mv_hi> <crc>
     //   frame = [0x00, 3, 0x04, mv_lo, mv_hi]
     //   data = frame[2:] = [0x04, mv_lo, mv_hi]
-    //   data[0] == 0x04 → battery packet
+    //   data[0] == 0x04 → battery sub-command
 
     enum class State : uint8_t
     {
-        START1, START2, LENGTH, FUNCTION, DATA, CHECKSUM
+        START1, START2, FUNCTION, LENGTH, DATA, CHECKSUM
     };
 
     State      state      = State::START1;
@@ -322,13 +323,7 @@ void Board::recvTask()
                 break;
 
             case State::START2:
-                state = (byte == 0x55) ? State::LENGTH : State::START1;
-                break;
-
-            case State::LENGTH:
-                length = byte;
-                recv_count = 0;
-                state = State::FUNCTION;
+                state = (byte == 0x55) ? State::FUNCTION : State::START1;
                 break;
 
             case State::FUNCTION:
@@ -336,14 +331,21 @@ void Board::recvTask()
                 {
                     func = byte;
                     frame.clear();
-                    frame.push_back(func);   // frame[0] = func
-                    frame.push_back(length); // frame[1] = length
-                    state = (length == 0) ? State::CHECKSUM : State::DATA;
+                    frame.push_back(func); // frame[0] = func
+                    frame.push_back(0);    // frame[1] = placeholder for length
+                    state = State::LENGTH;
                 }
                 else
                 {
                     state = State::START1;
                 }
+                break;
+
+            case State::LENGTH:
+                length = byte;
+                frame[1] = length;
+                recv_count = 0;
+                state = (length == 0) ? State::CHECKSUM : State::DATA;
                 break;
 
             case State::DATA:
