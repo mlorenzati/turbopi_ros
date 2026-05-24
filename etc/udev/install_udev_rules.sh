@@ -3,8 +3,8 @@
 # (STM32 co-processor) on Raspberry Pi 5.
 #
 # The expansion board connects via the 40-pin GPIO header UART, which appears
-# as /dev/ttyAMA10 on Pi5.  This script:
-#   1. Installs the udev rule that creates the /dev/rrc symlink → ttyAMA10
+# as /dev/ttyAMA on Pi5.  This script:
+#   1. Installs the udev rule that creates the /dev/rrc symlink → ttyAMA
 #   2. Adds the dtoverlay=uart0-pi5 line to /boot/firmware/config.txt if needed
 #   3. Adds the current user to the dialout group
 #
@@ -15,13 +15,19 @@ set -e
 
 SCRIPT_DIR="$(dirname "$0")"
 
-# ── 1. Install udev rule ───────────────────────────────────────────────────────
+# ── 1. Install udev rules ──────────────────────────────────────────────────────
 
+# STM32 co-processor (RRC board) via GPIO UART → /dev/rrc
 RULES_SRC="$SCRIPT_DIR/99-ttyAMA-rrc.rules"
 RULES_DEST="/etc/udev/rules.d/99-ttyAMA-rrc.rules"
-
 echo "Installing udev rule: $RULES_SRC -> $RULES_DEST"
 sudo cp "$RULES_SRC" "$RULES_DEST"
+
+# RPLidar USB-to-serial (CP2102) → /dev/rplidar
+RPLIDAR_SRC="$SCRIPT_DIR/99-rplidar.rules"
+RPLIDAR_DEST="/etc/udev/rules.d/99-rplidar.rules"
+echo "Installing udev rule: $RPLIDAR_SRC -> $RPLIDAR_DEST"
+sudo cp "$RPLIDAR_SRC" "$RPLIDAR_DEST"
 
 echo "Reloading udev rules..."
 sudo udevadm control --reload-rules
@@ -67,8 +73,12 @@ echo ""
 if [ "${NEED_REBOOT:-0}" = "1" ]; then
     echo "======================================================="
     echo "  REBOOT REQUIRED for all changes to take effect."
-    echo "  After reboot, verify with:  ls -la /dev/rrc"
+    echo "  After reboot, verify with:"
+    echo "    ls -la /dev/rrc       (STM32 board)"
+    echo "    ls -la /dev/rplidar   (RPLidar, when USB plugged in)"
     echo "======================================================="
 else
-    echo "All done. Verify the symlink with:  ls -la /dev/rrc"
+    echo "All done. Verify the symlinks with:"
+    echo "  ls -la /dev/rrc       (STM32 board)"
+    echo "  ls -la /dev/rplidar   (RPLidar, when USB plugged in)"
 fi
