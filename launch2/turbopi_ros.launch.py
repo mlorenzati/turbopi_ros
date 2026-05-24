@@ -36,6 +36,7 @@ def launch_setup(context: LaunchContext):
     debug = eval(context.perform_substitution(LaunchConfiguration('debug')).title())
     drive = context.perform_substitution(LaunchConfiguration('drive'))
     lidar = eval(context.perform_substitution(LaunchConfiguration('lidar')).title())
+    lidar_port = context.perform_substitution(LaunchConfiguration('lidar_port'))
     sim = eval(context.perform_substitution(LaunchConfiguration('sim')).title())
     camera_params_file = os.path.join(pkg_path, 'config', 'camera.yaml')
     slam_params_file = os.path.join(pkg_path, 'config', 'slam_toolbox.yaml')
@@ -158,13 +159,14 @@ def launch_setup(context: LaunchContext):
     )
 
     # RPLidar driver node – publishes /scan topic and provides /start_motor + /stop_motor services
+    # Default serial port is /dev/rplidar (udev symlink). Override with lidar_port:=/dev/ttyUSB0
     rplidar_node = Node(
         package='rplidar_ros',
         executable='rplidar_node',
         name='rplidar_node',
         output='screen',
         parameters=[{
-            'serial_port': '/dev/rplidar',
+            'serial_port': lidar_port,
             'serial_baudrate': 115200,
             'frame_id': 'lidar_link',
             'inverted': False,
@@ -344,6 +346,13 @@ def generate_launch_description():
             "lidar",
             default_value="False",
             description="Start with lidar hardware",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "lidar_port",
+            default_value="/dev/rplidar",
+            description="Serial port for RPLidar (e.g. /dev/rplidar or /dev/ttyUSB0)",
         )
     )
     declared_arguments.append(

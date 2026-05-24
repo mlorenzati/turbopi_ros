@@ -34,7 +34,9 @@ namespace turbopi_hardware_interface
 {
     TurboPiSystemHardware::~TurboPiSystemHardware()
     {
-        on_deactivate(rclcpp_lifecycle::State());
+        // Do NOT call on_deactivate() here – the ros2_control framework already
+        // calls it during shutdown, and calling it again from the destructor
+        // causes a second hw_stop_sec_ wait and a SIGKILL from the launch system.
     }
 
     hardware_interface::CallbackReturn TurboPiSystemHardware::on_init(
