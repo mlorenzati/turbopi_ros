@@ -57,6 +57,9 @@ def launch_setup(context: LaunchContext):
             "use_camera:=",
             camera_type,
             " ",
+            "use_lidar:=",
+            "lidar" if lidar else "default",
+            " ",
         ]
     )
     robot_description = {'robot_description': robot_description_content}
@@ -167,7 +170,7 @@ def launch_setup(context: LaunchContext):
         parameters=[{
             'serial_port': lidar_port,
             'serial_baudrate': 115200,
-            'frame_id': 'lidar_link',
+            'frame_id': 'lidar',
             'inverted': False,
             'angle_compensate': True,
             'scan_mode': 'Standard',
