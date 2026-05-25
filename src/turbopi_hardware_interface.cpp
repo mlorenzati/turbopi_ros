@@ -219,7 +219,7 @@ namespace turbopi_hardware_interface
     hardware_interface::return_type TurboPiSystemHardware::read(
         const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
     {
-        for (std::size_t i = 0; i < hw_velocities_.size(); i++)
+        for (std::size_t i = 0; i < info_.joints.size(); i++)
         {
             turbopi::Joint joint = turbopi_.getJoint(info_.joints[i].name);
 
@@ -233,7 +233,19 @@ namespace turbopi_hardware_interface
                             hw_commands_[i],
                             hw_positions_[i],
                             hw_velocities_[i]);
-            } 
+            }
+            else
+            {
+                // Servo joints: reflect command back as position state so the
+                // JointGroupPositionController sees convergence and stays active.
+                hw_positions_[i] = hw_commands_[i];
+
+                RCLCPP_DEBUG(rclcpp::get_logger(CLASS_NAME),
+                            "Joint: %s (servo), command %.5f, position state: %.5f",
+                            info_.joints[i].name.c_str(),
+                            hw_commands_[i],
+                            hw_positions_[i]);
+            }
 
             turbopi_.setJoint(joint);
         }
@@ -266,7 +278,10 @@ namespace turbopi_hardware_interface
 
             turbopi::Joint joint = turbopi_.getJoint(info_.joints[i].name);
 
-            hw_velocities_[i] = hw_commands_[i];
+            if (info_.joints[i].name.find("wheel") != std::string::npos)
+            {
+                hw_velocities_[i] = hw_commands_[i];
+            }
 
             // Commands sent to hardware
             RCLCPP_DEBUG(rclcpp::get_logger(CLASS_NAME),
@@ -277,6 +292,10 @@ namespace turbopi_hardware_interface
                          hw_velocities_[i]);
 
             joint.actuate(hw_commands_[i], duration);
+
+            // Store updated joint state (previousEffort) back so servo
+            // actuation guard (effort != _previousEffort) works correctly.
+            turbopi_.setJoint(joint);
         }
 
         return hardware_interface::return_type::OK;
