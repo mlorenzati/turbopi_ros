@@ -306,6 +306,106 @@ is run within.
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 
+## Camera (2DOF USB Camera)
+
+The robot supports the original Hiwonder 2DOF pan/tilt USB camera via the
+`v4l2_camera` ROS package. The camera connects to `/dev/video0` and the two
+servo joints control pan (left/right) and tilt (up/down).
+
+### 1. Verify the camera is detected
+
+```bash
+# Check the device exists
+ls /dev/video*
+# Expected: /dev/video0 (plus metadata nodes video1, video2)
+
+# Check kernel recognised it (shows driver name e.g. uvcvideo)
+v4l2-ctl --list-devices
+
+# Check supported formats/resolutions
+v4l2-ctl --device=/dev/video0 --list-formats-ext
+
+# Capture a single test frame (no ROS needed)
+ffmpeg -f v4l2 -i /dev/video0 -frames:v 1 /tmp/test.jpg -y && echo "Camera OK"
+```
+
+If `/dev/video0` does not appear, add your user to the `video` group:
+
+```bash
+sudo usermod -aG video $USER
+# log out and back in for the change to take effect
+```
+
+### 2. Launch with camera enabled
+
+```bash
+ros2 launch turbopi_ros turbopi_ros.launch.py \
+    camera:=True \
+    camera_type:=default
+```
+
+- `camera:=True` — starts the `v4l2_camera_node` (default `False`)
+- `camera_type:=default` — selects the 2DOF pan/tilt camera and enables the
+  `position_controllers` for the pan/tilt servos (default is `depth`)
+
+To also enable the RPLidar at the same time:
+
+```bash
+ros2 launch turbopi_ros turbopi_ros.launch.py \
+    camera:=True \
+    camera_type:=default \
+    lidar:=True
+```
+
+### 3. Verify the camera topic
+
+```bash
+# Should show ~30 Hz when the camera is streaming
+ros2 topic hz /camera
+
+# Show topic type and publisher count
+ros2 topic info /camera
+
+# View a single compressed frame in the terminal (requires image_transport)
+ros2 run image_transport republish raw --ros-args -r in:=/camera -r out:=/camera_out
+```
+
+### 4. View the live feed in RViz2
+
+The `turbopi.rviz` config already includes an **Image** display subscribed to
+`/camera`. Launch RViz2 with the pre-configured layout and the camera panel
+will show the live feed automatically:
+
+```bash
+ros2 run rviz2 rviz2 -d ~/ros2_ws/install/turbopi_ros/share/turbopi_ros/config/turbopi.rviz
+```
+
+### Camera configuration
+
+The camera parameters (resolution, pixel format, colour adjustments) are in
+`config/camera.yaml`:
+
+| Parameter | Value |
+|-----------|-------|
+| Device | `/dev/video0` |
+| Resolution | 640 × 480 |
+| Pixel format | YUYV |
+| Frame ID | `camera` |
+| Camera info | `config/camera_info.yaml` |
+
+To change the resolution, edit `config/camera.yaml`:
+
+```yaml
+image_size: [1280, 720]   # change from 640x480
+```
+
+> **Note:** The 2DOF pan/tilt servo joints (`camera_pan_joint`,
+> `camera_tilt_joint`) are only active when `camera_type:=default`. With the
+> depth camera (`camera_type:=depth`, the default) those joints do not exist
+> and `position_controllers` is not started.
+
+---
+
 ## Hardware
 
 - [Hiwonder TurboPi](https://www.hiwonder.com/products/turbopi?variant=40112905388119) - 

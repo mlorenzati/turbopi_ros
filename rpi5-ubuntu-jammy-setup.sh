@@ -91,7 +91,10 @@ sudo apt-get install -y \
     ros-jazzy-ros2-control-cmake \
     ros-jazzy-mecanum-drive-controller \
     ros-jazzy-joy-linux \
-    ros-jazzy-teleop-twist-joy
+    ros-jazzy-teleop-twist-joy \
+    ros-jazzy-v4l2-camera \
+    ros-jazzy-camera-info-manager \
+    ros-jazzy-image-transport
 
 ############################
 # rosdep init
