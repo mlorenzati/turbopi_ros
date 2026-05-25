@@ -142,6 +142,31 @@ If your unit uses a CH340 chip instead of CP2102 (verify with
 `udevadm info -a -n /dev/ttyUSB0 | grep -E 'idVendor|idProduct'`), edit
 `etc/udev/99-rplidar.rules` to use `idVendor="1a86" idProduct="7523"`.
 
+### RPLidar mount orientation
+
+The RPLidar A1 is physically mounted **facing backward** on the TurboPi (USB
+connector toward the front of the robot). The `lidar_joint` in the URDF
+compensates for this by applying a **180° (π radian) yaw rotation** by default,
+so that the published `/scan` points are correctly oriented in the `map` frame.
+
+This is controlled by the `lidar_yaw` launch argument (default `π`):
+
+```bash
+# Default — lidar USB connector faces forward (backward-facing sensor, 180° rotation)
+ros2 launch turbopi_ros turbopi_ros.launch.py lidar:=True
+
+# Override — lidar USB connector faces backward (forward-facing sensor, no rotation)
+ros2 launch turbopi_ros turbopi_ros.launch.py lidar:=True lidar_yaw:=0.0
+```
+
+To verify the lidar orientation in the TF tree:
+
+```bash
+# Check the lidar joint transform
+ros2 run tf2_ros tf2_echo chassis lidar
+# With default lidar_yaw=pi: rotation.z should be ~1.0 (quaternion, equivalent to 180°)
+```
+
 ### Automated setup
 
 If setting up a fresh Pi 5, the `rpi5-ubuntu-jammy-setup.sh` script at the root
@@ -212,7 +237,35 @@ optional arguments (all default `False` unless noted).
     position controller spawner is skipped entirely (the joints don't exist).
   - `drive:=mecanum` - Drive system diff or mecanum (default `diff`).
   - `lidar:=True` - Enable optional hardware lidar support (RPLidar on `/dev/rplidar` udev symlink). Override port with `lidar_port:=/dev/ttyUSB0`.
+  - `lidar_yaw:=3.14159` - Lidar mount yaw rotation in radians (default `π` = 180° for backward-facing mount). Use `0.0` for forward-facing mount.
   - `sim:=True` - Use simulated mock hardware (skips all serial/I2C access).
+
+#### Common hardware launch combinations
+
+Minimal (diff drive, no camera, no lidar):
+```bash
+ros2 launch turbopi_ros turbopi_ros.launch.py
+```
+
+With 2DOF USB camera and RPLidar (diff drive):
+```bash
+ros2 launch turbopi_ros turbopi_ros.launch.py \
+    camera:=True camera_type:=default \
+    lidar:=True
+```
+
+With 2DOF USB camera, RPLidar and **mecanum drive** (full hardware):
+```bash
+ros2 launch turbopi_ros turbopi_ros.launch.py \
+    drive:=mecanum \
+    camera:=True camera_type:=default \
+    lidar:=True
+```
+
+Simulation only (no hardware required):
+```bash
+ros2 launch turbopi_ros turbopi_ros.launch.py sim:=True
+```
 
 ### Docker Containers
 

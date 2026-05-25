@@ -36,6 +36,7 @@ def launch_setup(context: LaunchContext):
     drive = context.perform_substitution(LaunchConfiguration('drive'))
     lidar = eval(context.perform_substitution(LaunchConfiguration('lidar')).title())
     lidar_port = context.perform_substitution(LaunchConfiguration('lidar_port'))
+    lidar_yaw = context.perform_substitution(LaunchConfiguration('lidar_yaw'))
     sim = eval(context.perform_substitution(LaunchConfiguration('sim')).title())
     camera_params_file = os.path.join(pkg_path, 'config', 'camera.yaml')
     slam_params_file = os.path.join(pkg_path, 'config', 'slam_toolbox.yaml')
@@ -59,6 +60,9 @@ def launch_setup(context: LaunchContext):
             " ",
             "use_lidar:=",
             "lidar" if lidar else "default",
+            " ",
+            "lidar_yaw:=",
+            lidar_yaw,
             " ",
         ]
     )
@@ -322,6 +326,14 @@ def generate_launch_description():
             "lidar_port",
             default_value="/dev/rplidar",
             description="Serial port for RPLidar (e.g. /dev/rplidar or /dev/ttyUSB0)",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "lidar_yaw",
+            default_value="3.14159265358979",
+            description="Lidar mount yaw rotation in radians (default pi=3.14159 for 180° "
+                        "backward-facing mount). Use 0.0 for forward-facing mount.",
         )
     )
     declared_arguments.append(
