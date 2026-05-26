@@ -285,35 +285,58 @@ def launch_setup(context: LaunchContext):
         delayed_sonar_node_spawner,
     ]
 
-    # position_controllers (pan/tilt) only exist when the default 2DOF camera is used.
-    # With the depth camera (camera_type != 'default') those joints are absent and the
-    # JointGroupPositionController spawner would fail.
-    # Spawn controller chain: drive -> [position (if default)] -> [rplidar (if lidar)] -> [slam]
-    # Each step uses OnProcessExit of the previous spawner to avoid duplicate event targets.
-    if camera_type == 'default':
+    _add_optional_nodes(
+        nodes,
+        camera_type=camera_type,
+        camera=camera,
+        lidar=lidar,
+        delayed_position_spawner=delayed_position_spawner,
+        delayed_v4l2_camera_node_after_position=delayed_v4l2_camera_node_after_position,
+        delayed_v4l2_camera_node_after_drive=delayed_v4l2_camera_node_after_drive,
+        delayed_rplidar_spawner_after_position=delayed_rplidar_spawner_after_position,
+        delayed_rplidar_spawner_after_drive=delayed_rplidar_spawner_after_drive,
+        delayed_slam_toolbox_node_spawner=delayed_slam_toolbox_node_spawner,
+    )
+
+    return nodes
+
+
+def _add_optional_nodes(
+    nodes,
+    camera_type,
+    camera,
+    lidar,
+    delayed_position_spawner,
+    delayed_v4l2_camera_node_after_position,
+    delayed_v4l2_camera_node_after_drive,
+    delayed_rplidar_spawner_after_position,
+    delayed_rplidar_spawner_after_drive,
+    delayed_slam_toolbox_node_spawner,
+):
+    """Add optional controller/sensor nodes using a conflict-free OnProcessExit chain.
+
+    Chain: drive -> [position] -> [rplidar] -> [slam]
+    Each step exits before the next starts, avoiding duplicate event-handler targets.
+    v4l2_camera_node is long-running (never exits) so rplidar can share the same
+    position_spawner exit event without conflict.
+    """
+    use_default_camera = camera_type == 'default'
+
+    if use_default_camera:
+        # position_controllers (pan/tilt) only exist for the 2DOF camera mount.
         nodes += [delayed_position_spawner]
-        # With position_controllers active, further items chain off position_spawner.
         if camera:
             nodes += [delayed_v4l2_camera_node_after_position]
         if lidar:
-            # rplidar chains after v4l2 if camera active, else after position_spawner
-            if camera:
-                # Both camera and lidar: need a separate chain point.
-                # Use rplidar after position (v4l2 is a long-running node, not a spawner)
-                # v4l2 starts as a node (doesn't exit), so rplidar can also use position_spawner.
-                nodes += [delayed_rplidar_spawner_after_position]
-            else:
-                nodes += [delayed_rplidar_spawner_after_position]
-            nodes += [delayed_slam_toolbox_node_spawner]
+            # v4l2_camera_node never exits, so rplidar can safely share the same
+            # position_spawner OnProcessExit trigger without conflict.
+            nodes += [delayed_rplidar_spawner_after_position, delayed_slam_toolbox_node_spawner]
     else:
-        # No position_controllers: everything chains after drive_spawner
+        # No position_controllers: chain camera and lidar directly after drive_spawner.
         if camera:
             nodes += [delayed_v4l2_camera_node_after_drive]
         if lidar:
-            nodes += [delayed_rplidar_spawner_after_drive]
-            nodes += [delayed_slam_toolbox_node_spawner]
-
-    return nodes
+            nodes += [delayed_rplidar_spawner_after_drive, delayed_slam_toolbox_node_spawner]
 
 
 def generate_launch_description():
