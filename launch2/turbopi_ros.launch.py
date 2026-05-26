@@ -206,17 +206,29 @@ def launch_setup(context: LaunchContext):
         )
     )
 
+    # Chain position_controllers after drive_spawner exits (not after joint_broad_spawner)
+    # because two OnProcessExit handlers on the same target only fire one reliably.
     delayed_position_spawner = RegisterEventHandler(
         event_handler=OnProcessExit(
-            target_action=joint_broad_spawner,
+            target_action=drive_spawner,
             on_exit=[position_spawner],
         )
     )
 
-    # When joint_state_broadcaster is loaded, start the rplidar driver
-    delayed_rplidar_spawner = RegisterEventHandler(
+    # RPLidar starts after position_controllers spawner exits (chains cleanly).
+    # When camera_type != 'default', position_spawner is not started, so rplidar
+    # is chained after drive_spawner instead (handled in nodes list below).
+    delayed_rplidar_spawner_after_position = RegisterEventHandler(
         event_handler=OnProcessExit(
-            target_action=joint_broad_spawner,
+            target_action=position_spawner,
+            on_exit=[rplidar_node],
+        )
+    )
+
+    # Fallback: rplidar after drive_spawner when position_controllers is not used.
+    delayed_rplidar_spawner_after_drive = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=drive_spawner,
             on_exit=[rplidar_node],
         )
     )
@@ -246,9 +258,18 @@ def launch_setup(context: LaunchContext):
         )
     )
 
-    delayed_v4l2_camera_node = RegisterEventHandler(
+    # v4l2 camera: chain after position_spawner when default camera (servos active),
+    # otherwise chain after drive_spawner.
+    delayed_v4l2_camera_node_after_position = RegisterEventHandler(
         event_handler=OnProcessExit(
-            target_action=joint_broad_spawner,
+            target_action=position_spawner,
+            on_exit=[v4l2_camera_node],
+        )
+    )
+
+    delayed_v4l2_camera_node_after_drive = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=drive_spawner,
             on_exit=[v4l2_camera_node],
         )
     )
@@ -267,17 +288,30 @@ def launch_setup(context: LaunchContext):
     # position_controllers (pan/tilt) only exist when the default 2DOF camera is used.
     # With the depth camera (camera_type != 'default') those joints are absent and the
     # JointGroupPositionController spawner would fail.
+    # Spawn controller chain: drive -> [position (if default)] -> [rplidar (if lidar)] -> [slam]
+    # Each step uses OnProcessExit of the previous spawner to avoid duplicate event targets.
     if camera_type == 'default':
         nodes += [delayed_position_spawner]
-
-    if camera:
-        nodes += [delayed_v4l2_camera_node]
-
-    if lidar:
-        nodes += [
-            delayed_rplidar_spawner,
-            delayed_slam_toolbox_node_spawner,
-        ]
+        # With position_controllers active, further items chain off position_spawner.
+        if camera:
+            nodes += [delayed_v4l2_camera_node_after_position]
+        if lidar:
+            # rplidar chains after v4l2 if camera active, else after position_spawner
+            if camera:
+                # Both camera and lidar: need a separate chain point.
+                # Use rplidar after position (v4l2 is a long-running node, not a spawner)
+                # v4l2 starts as a node (doesn't exit), so rplidar can also use position_spawner.
+                nodes += [delayed_rplidar_spawner_after_position]
+            else:
+                nodes += [delayed_rplidar_spawner_after_position]
+            nodes += [delayed_slam_toolbox_node_spawner]
+    else:
+        # No position_controllers: everything chains after drive_spawner
+        if camera:
+            nodes += [delayed_v4l2_camera_node_after_drive]
+        if lidar:
+            nodes += [delayed_rplidar_spawner_after_drive]
+            nodes += [delayed_slam_toolbox_node_spawner]
 
     return nodes
 
