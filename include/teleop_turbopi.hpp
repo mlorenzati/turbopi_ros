@@ -27,15 +27,25 @@ namespace teleop_turbopi
 
             /**
              * @brief DPad and Joystick axes on the DualShock 4 gamepad
+             *
+             * Actual DS4 axis order from joy_linux_node (confirmed via ros2 topic echo /joy):
+             *   0 = LEFT_JOY_X  (left/right)
+             *   1 = LEFT_JOY_Y  (up/down)
+             *   2 = LEFT_TRIGGER   (1.0=released, -1.0=fully pressed)
+             *   3 = RIGHT_JOY_X (left/right)
+             *   4 = RIGHT_JOY_Y (up/down)
+             *   5 = RIGHT_TRIGGER  (1.0=released, -1.0=fully pressed)
+             *   6 = DPAD_X
+             *   7 = DPAD_Y
              */
             enum class axes: int
             {
                 LEFT_JOY_X,
                 LEFT_JOY_Y,
-                RIGHT_JOY_X,
                 LEFT_TRIGGER,
-                RIGHT_TRIGGER,
+                RIGHT_JOY_X,
                 RIGHT_JOY_Y,
+                RIGHT_TRIGGER,
                 DPAD_X,
                 DPAD_Y
             };
