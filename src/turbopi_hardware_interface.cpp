@@ -237,7 +237,7 @@ namespace turbopi_hardware_interface
             else
             {
                 // Servo joints: reflect command back as position state so the
-                // JointGroupPositionController sees convergence and stays active.
+                // JointTrajectoryController sees convergence and stays active.
                 hw_positions_[i] = hw_commands_[i];
 
                 RCLCPP_DEBUG(rclcpp::get_logger(CLASS_NAME),

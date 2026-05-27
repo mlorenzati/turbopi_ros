@@ -59,3 +59,8 @@ position_controllers:
       - position
     allow_partial_joints_goal: true
     open_loop_control: true
+    # Accept trajectory goals without a velocity constraint
+    allow_nonzero_velocity_at_trajectory_end: true
+    # Publish joint state feedback
+    state_publish_rate: 10.0
+    action_monitor_rate: 10.0

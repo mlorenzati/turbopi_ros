@@ -11,6 +11,8 @@
 #ifndef TURBOPI__JOINT_H
 #define TURBOPI__JOINT_H
 
+#include <cmath>
+#include <limits>
 #include <sstream>
 
 #include "board.hpp"
@@ -109,7 +111,7 @@ namespace turbopi
 			uint8_t max_  = 75;
 			uint8_t min_  = 0;
 			uint8_t type_ = 0;
-			double  _previousEffort = 0.0;
+			double  _previousEffort = std::numeric_limits<double>::quiet_NaN();
 	};
 }
 
