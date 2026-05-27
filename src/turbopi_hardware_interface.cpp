@@ -183,14 +183,21 @@ namespace turbopi_hardware_interface
                         "%.1f seconds left...", hw_start_sec_ - i);
         }
 
-        // set default values
+        // Set default values. Wheel joints get command=0 immediately.
+        // Servo (camera) joints keep hw_commands_[i] = NaN until the
+        // JointTrajectoryController sends its first trajectory point, so that
+        // write() does not fire a spurious startup command that slams the servos.
         for (auto i = 0u; i < hw_positions_.size(); i++)
         {
             if (std::isnan(hw_positions_[i]))
             {
                 hw_positions_[i] = 0;
                 hw_velocities_[i] = 0;
-                hw_commands_[i] = 0;
+                if (info_.joints[i].name.find("wheel") != std::string::npos)
+                {
+                    hw_commands_[i] = 0;
+                }
+                // servo joints: hw_commands_[i] stays NaN (initialized in on_init)
             }
         }
 
@@ -238,7 +245,8 @@ namespace turbopi_hardware_interface
             {
                 // Servo joints: reflect command back as position state so the
                 // JointTrajectoryController sees convergence and stays active.
-                hw_positions_[i] = hw_commands_[i];
+                // If no command has been received yet (NaN), report position 0.
+                hw_positions_[i] = std::isnan(hw_commands_[i]) ? 0.0 : hw_commands_[i];
 
                 RCLCPP_DEBUG(rclcpp::get_logger(CLASS_NAME),
                             "Joint: %s (servo), command %.5f, position state: %.5f",
@@ -291,11 +299,16 @@ namespace turbopi_hardware_interface
                          hw_positions_[i],
                          hw_velocities_[i]);
 
-            joint.actuate(hw_commands_[i], duration);
+            // Skip actuate if command is still NaN (servo joints before first
+            // trajectory goal from the JointTrajectoryController).
+            if (!std::isnan(hw_commands_[i]))
+            {
+                joint.actuate(hw_commands_[i], duration);
 
-            // Store updated joint state (previousEffort) back so servo
-            // actuation guard (effort != _previousEffort) works correctly.
-            turbopi_.setJoint(joint);
+                // Store updated joint state (previousEffort) back so servo
+                // actuation guard (effort != _previousEffort) works correctly.
+                turbopi_.setJoint(joint);
+            }
         }
 
         return hardware_interface::return_type::OK;
