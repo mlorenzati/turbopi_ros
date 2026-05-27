@@ -71,6 +71,12 @@ namespace turbopi_hardware_interface
         double hw_start_sec_;
         double hw_stop_sec_;
 
+        // Servo trim offsets applied at the hardware layer (not visible to controller).
+        // Loaded from ros2_control.xacro <param name="camera_pan_offset"> and
+        // <param name="camera_tilt_offset">. Adjust to correct mechanical zero.
+        double camera_pan_offset_  = 0.0;
+        double camera_tilt_offset_ = 0.0;
+
         turbopi::TurboPi turbopi_;
         std::vector<double> hw_commands_;
         std::vector<double> hw_positions_;

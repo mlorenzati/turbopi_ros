@@ -56,6 +56,19 @@ namespace turbopi_hardware_interface
         hw_start_sec_ = std::stod(info_.hardware_parameters["hw_start_duration_sec"]);
         hw_stop_sec_ = std::stod(info_.hardware_parameters["hw_stop_duration_sec"]);
 
+        // Servo trim offsets (default 0.0 if not present in URDF hardware params).
+        // Set camera_pan_offset / camera_tilt_offset in ros2_control.xacro to correct
+        // the mechanical zero position of each servo without changing the controller goal.
+        auto get_param = [&](const std::string &name, double default_val) -> double {
+            auto it = info_.hardware_parameters.find(name);
+            return (it != info_.hardware_parameters.end()) ? std::stod(it->second) : default_val;
+        };
+        camera_pan_offset_  = get_param("camera_pan_offset",  0.0);
+        camera_tilt_offset_ = get_param("camera_tilt_offset", 0.0);
+        RCLCPP_INFO(rclcpp::get_logger(CLASS_NAME),
+                    "Camera servo offsets: pan=%.4f tilt=%.4f",
+                    camera_pan_offset_, camera_tilt_offset_);
+
         // Resize vectors
         hw_commands_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
         hw_positions_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
@@ -303,7 +316,16 @@ namespace turbopi_hardware_interface
             // trajectory goal from the JointTrajectoryController).
             if (!std::isnan(hw_commands_[i]))
             {
-                joint.actuate(hw_commands_[i], duration);
+                // Apply servo trim offset for camera joints.
+                // The offset corrects the mechanical zero without changing the
+                // commanded position seen by the controller or the URDF.
+                double effort = hw_commands_[i];
+                if (info_.joints[i].name == "camera_joint")
+                    effort += camera_pan_offset_;
+                else if (info_.joints[i].name == "camera_frame_joint")
+                    effort += camera_tilt_offset_;
+
+                joint.actuate(effort, duration);
 
                 // Store updated joint state (previousEffort) back so servo
                 // actuation guard (effort != _previousEffort) works correctly.

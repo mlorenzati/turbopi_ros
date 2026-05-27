@@ -137,11 +137,12 @@ def launch_setup(context: LaunchContext):
     slam_toolbox_node = Node(
         package='slam_toolbox',
         executable='async_slam_toolbox_node',
-        # paused_new_measurements is declared here as well as in slam_toolbox.yaml
-        # to work around a slam_toolbox Jazzy bug where the async parameter client
-        # polls this parameter before the yaml file is fully loaded, producing a
-        # continuous "[rclcpp]: Failed to get parameters: paused_new_measurements" warning.
         parameters=[ slam_params_file, {'use_sim_time': True, 'paused_new_measurements': False} ],
+        # Suppress the spurious "[rclcpp]: Failed to get parameters: paused_new_measurements"
+        # warning that comes from a slam_toolbox Jazzy bug: the node's async parameter client
+        # polls its own parameter before fully declaring it.  Setting rclcpp logger to ERROR
+        # silences this harmless but noisy warning without affecting slam_toolbox's own logger.
+        ros_arguments=['--log-level', 'rclcpp:=ERROR'],
     )
 
     battery_monitor_node = Node(
