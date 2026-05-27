@@ -24,8 +24,10 @@ set(INCLUDE_DEPENDS
     rclcpp_lifecycle
     controller_manager
     joint_limits
+    geometry_msgs
     sensor_msgs
     std_msgs
+    trajectory_msgs
 )
 
 foreach(Dependency IN ITEMS ${INCLUDE_DEPENDS})

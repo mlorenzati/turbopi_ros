@@ -12,7 +12,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/node_options.hpp"
 #include "sensor_msgs/msg/joy.hpp"
-#include "std_msgs/msg/float64_multi_array.hpp"
+#include "trajectory_msgs/msg/joint_trajectory.hpp"
 #include "std_msgs/msg/string.hpp"
 
 namespace teleop_turbopi
@@ -87,10 +87,18 @@ namespace teleop_turbopi
         private:
             // publishers - topics we publish commands to; cmd_vel and positions
             rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr publisher_cmd_vel_;
-            rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr publisher_pos_;
+            rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr publisher_pos_;
 
             // subscriber - the joy topic we listen to for joystick buttons
             rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr subscription_;
+
+            // Accumulated camera position state [-1..1] for pan and tilt.
+            // Joystick axes increment/decrement these values each callback.
+            double camera_pan_  = 0.0;
+            double camera_tilt_ = 0.0;
+
+            // Step size per joystick callback (joystick axis value [-1..1] × step)
+            static constexpr double CAMERA_STEP = 0.05;
 
             /**
              * @brief Callback function for subscription fired when messages
