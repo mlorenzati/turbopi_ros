@@ -61,6 +61,16 @@ namespace turbopi
              */
             int getBattery();
 
+            /**
+             * @brief Sound the buzzer via the STM32 board.
+             *
+             * @param freq      Frequency in Hz (e.g. 1900 = high, 400 = low)
+             * @param on_time   Beep on duration in seconds
+             * @param off_time  Beep off (gap) duration in seconds
+             * @param repeat    Number of beep repetitions
+             */
+            void setBuzzer(uint16_t freq, float on_time, float off_time, uint16_t repeat);
+
 	};
 }
 

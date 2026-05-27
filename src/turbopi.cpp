@@ -109,4 +109,11 @@ static turbopi::Board* g_board = nullptr;
         return g_board->getBattery();
     }
 
+    void TurboPi::setBuzzer(uint16_t freq, float on_time, float off_time, uint16_t repeat)
+    {
+        if (g_board == nullptr)
+            return;
+        g_board->setBuzzer(freq, on_time, off_time, repeat);
+    }
+
 }

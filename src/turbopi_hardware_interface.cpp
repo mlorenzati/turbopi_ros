@@ -21,6 +21,7 @@
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/float32_multi_array.hpp"
 #include "std_msgs/msg/int32.hpp"
 
 #include "turbopi_hardware_interface.hpp"
@@ -51,6 +52,13 @@ namespace turbopi_hardware_interface
             return hardware_interface::CallbackReturn::ERROR;
         }
         turbopi_ = turbopi::TurboPi();
+
+        // Helper lambda: sound the error tone and return ERROR.
+        // Low pitch (400 Hz), long beep (2 s on), single repeat – indicates init failure.
+        auto fail = [this]() -> hardware_interface::CallbackReturn {
+            turbopi_.setBuzzer(400, 2.0f, 0.0f, 1);
+            return hardware_interface::CallbackReturn::ERROR;
+        };
 
         // need to add try/catch for missing params, blows up otherwise
         hw_start_sec_ = std::stod(info_.hardware_parameters["hw_start_duration_sec"]);
@@ -83,7 +91,7 @@ namespace turbopi_hardware_interface
                              "Joint '%s' has %zu command interfaces found. 1 expected.",
                              joint.name.c_str(),
                              joint.command_interfaces.size());
-                return hardware_interface::CallbackReturn::ERROR;
+                return fail();
             }
 
             if (joint.name.find("wheel") != std::string::npos &&
@@ -94,7 +102,7 @@ namespace turbopi_hardware_interface
                              joint.name.c_str(),
                              joint.command_interfaces[0].name.c_str(),
                              hardware_interface::HW_IF_VELOCITY);
-                return hardware_interface::CallbackReturn::ERROR;
+                return fail();
             }
 
             if (joint.name.find("wheel") != std::string::npos &&
@@ -104,7 +112,7 @@ namespace turbopi_hardware_interface
                              "Joint '%s' has %zu state interface. 2 expected.",
                              joint.name.c_str(),
                              joint.state_interfaces.size());
-                return hardware_interface::CallbackReturn::ERROR;
+                return fail();
             }
 
             if (joint.state_interfaces[0].name != hardware_interface::HW_IF_POSITION)
@@ -114,7 +122,7 @@ namespace turbopi_hardware_interface
                              joint.name.c_str(),
                              joint.state_interfaces[0].name.c_str(),
                              hardware_interface::HW_IF_POSITION);
-                return hardware_interface::CallbackReturn::ERROR;
+                return fail();
             }
 
             if (joint.name.find("wheel") != std::string::npos &&
@@ -125,16 +133,47 @@ namespace turbopi_hardware_interface
                              joint.name.c_str(),
                              joint.state_interfaces[1].name.c_str(),
                              hardware_interface::HW_IF_VELOCITY);
-                return hardware_interface::CallbackReturn::ERROR;
+                return fail();
             }
         }
 
-        // Create a standalone node + publisher for raw battery mV so that
-        // battery_node (separate process) can subscribe instead of opening /dev/rrc.
+        // Create a standalone node for battery publishing and buzzer subscription.
+        // Both share this node so only one extra rclcpp::Node exists alongside
+        // the hardware-interface plugin (which runs inside ros2_control_node).
         battery_node_ = rclcpp::Node::make_shared("turbopi_battery_bridge");
         battery_pub_  = battery_node_->create_publisher<std_msgs::msg::Int32>(
                             "/battery_voltage_mv",
                             rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+
+        // Subscribe to /buzzer topic.
+        // Message is a Float32MultiArray with 4 elements: [freq, on_time, off_time, repeat]
+        //   freq      – Hz, e.g. 1900 (high) or 400 (low)
+        //   on_time   – seconds the beep is on
+        //   off_time  – seconds between beeps
+        //   repeat    – number of beeps
+        // Example: ros2 topic pub --once /buzzer std_msgs/msg/Float32MultiArray \
+        //            "data: [1900.0, 0.1, 0.05, 2]"
+        buzzer_sub_ = battery_node_->create_subscription<std_msgs::msg::Float32MultiArray>(
+            "/buzzer",
+            rclcpp::QoS(rclcpp::KeepLast(5)),
+            [this](const std_msgs::msg::Float32MultiArray::SharedPtr msg)
+            {
+                if (msg->data.size() < 4)
+                {
+                    RCLCPP_WARN(rclcpp::get_logger(CLASS_NAME),
+                                "/buzzer msg must have 4 elements: [freq, on_time, off_time, repeat]. "
+                                "Got %zu element(s) – ignoring.", msg->data.size());
+                    return;
+                }
+                uint16_t freq    = static_cast<uint16_t>(msg->data[0]);
+                float    on_t    = msg->data[1];
+                float    off_t   = msg->data[2];
+                uint16_t repeat  = static_cast<uint16_t>(msg->data[3]);
+                RCLCPP_INFO(rclcpp::get_logger(CLASS_NAME),
+                            "Buzzer: freq=%u Hz, on=%.2f s, off=%.2f s, repeat=%u",
+                            freq, on_t, off_t, repeat);
+                turbopi_.setBuzzer(freq, on_t, off_t, repeat);
+            });
 
         return hardware_interface::CallbackReturn::SUCCESS;
     }
@@ -216,6 +255,9 @@ namespace turbopi_hardware_interface
 
         RCLCPP_INFO(rclcpp::get_logger(CLASS_NAME), "Successfully activated!");
 
+        // Startup OK tone: high pitch (1900 Hz), short beep (0.1 s on, 0.05 s off), 2 beeps
+        turbopi_.setBuzzer(1900, 0.1f, 0.05f, 2);
+
         return hardware_interface::CallbackReturn::SUCCESS;
     }
 
@@ -271,6 +313,11 @@ namespace turbopi_hardware_interface
             turbopi_.setJoint(joint);
         }
 
+        // spin_some on every read() cycle so /buzzer subscription callbacks are
+        // dispatched promptly (not only on the slower battery publish cadence).
+        if (battery_node_)
+            rclcpp::spin_some(battery_node_);
+
         // Publish battery mV every ~5 s (50 cycles at 10 Hz) so battery_node
         // can subscribe instead of opening /dev/rrc in a separate process.
         if (battery_pub_ && (++battery_pub_counter_ >= 50))
@@ -282,9 +329,6 @@ namespace turbopi_hardware_interface
             auto msg = std_msgs::msg::Int32();
             msg.data = mv;
             battery_pub_->publish(msg);
-            // spin_some lets the DDS middleware process subscriber-matching events
-            // so that transient-local late-joiners (battery_node) receive the retained value.
-            rclcpp::spin_some(battery_node_);
         }
 
         return hardware_interface::return_type::OK;
