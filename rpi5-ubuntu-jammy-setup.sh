@@ -76,8 +76,10 @@ sudo apt-get install -y \
     libtinyxml2-dev \
     ros-jazzy-hardware-interface \
     ros-jazzy-controller-manager \
+    ros-jazzy-ros2controlcli \
     ros-jazzy-joint-state-broadcaster \
     ros-jazzy-joint-trajectory-controller \
+    ros-jazzy-position-controllers \
     ros-jazzy-diff-drive-controller \
     ros-jazzy-xacro \
     ros-jazzy-robot-state-publisher \
@@ -94,7 +96,8 @@ sudo apt-get install -y \
     ros-jazzy-teleop-twist-joy \
     ros-jazzy-v4l2-camera \
     ros-jazzy-camera-info-manager \
-    ros-jazzy-image-transport
+    ros-jazzy-image-transport \
+    ros-jazzy-controller-manager-msgs
 
 ############################
 # rosdep init
