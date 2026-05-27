@@ -1,4 +1,7 @@
-# TurboPi ROS
+# TurboPi ROS - pi 5 board
+
+This project is a collaboration to the work done by [Whilliam L Thomson](https://github.com/wltjr) to support into [TurboPi](https://github.com/wltjr/turbopi_ros) the new board for the raspberry pi 5.
+Licenses and credits fully goes to the original work creator and the plan is to move it back there with colcon compilation options passing the board for rpi4 or 5
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=plastic)](https://github.com/wltjr/turbopi_ros/blob/master/LICENSE.txt)
 ![Build Status](https://github.com/wltjr/turbopi_ros/actions/workflows/docker_build.yml/badge.svg)
@@ -456,6 +459,79 @@ image_size: [1280, 720]   # change from 640x480
 > `camera_tilt_joint`) are only active when `camera_type:=default`. With the
 > depth camera (`camera_type:=depth`, the default) those joints do not exist
 > and `position_controllers` is not started.
+
+---
+
+## Sensors & Actuators
+
+### Sonar (Ultrasonic Distance Sensor)
+
+The sonar sensor communicates over I2C (address `0x77`, works on both Pi4 and Pi5).
+It is started automatically by `turbopi_ros.launch.py`.
+
+| Topic | Message type | Rate |
+|-------|-------------|------|
+| `/sonar` | `sensor_msgs/msg/Range` | ~10 Hz |
+
+```bash
+# Monitor distance readings
+ros2 topic echo /sonar
+```
+
+### Infrared Line-Follower Sensors
+
+The four-infrared sensor array communicates over I2C (address `0x78`, works on
+both Pi4 and Pi5). It is started automatically by `turbopi_ros.launch.py`.
+
+| Topic | Message type | Description |
+|-------|-------------|-------------|
+| `/infrared` | `std_msgs/msg/UInt8MultiArray` | 4 sensor values (0 = dark, 1 = light) |
+
+```bash
+# Monitor infrared sensor readings
+ros2 topic echo /infrared
+```
+
+### Buzzer
+
+The buzzer is driven by the STM32 ROS Robot Controller board via the same UART
+link (`/dev/rrc`) used by the drive motors and servos. It supports frequency and
+timing control (unlike the Pi4's simple GPIO on/off buzzer).
+
+The buzzer is exposed as a **subscriber** topic handled inside the hardware
+interface process — no extra UART process is opened.
+
+| Topic | Message type | Description |
+|-------|-------------|-------------|
+| `/buzzer` | `std_msgs/msg/Float32MultiArray` | `[freq_hz, on_time_s, off_time_s, repeat]` |
+
+**Field reference:**
+
+| Index | Field | Example | Description |
+|-------|-------|---------|-------------|
+| `[0]` | `freq` | `1900.0` | Frequency in Hz (high pitch) / `400.0` (low pitch) |
+| `[1]` | `on_time` | `0.1` | Beep on duration in seconds |
+| `[2]` | `off_time` | `0.05` | Gap between beeps in seconds |
+| `[3]` | `repeat` | `2` | Number of beep repetitions |
+
+```bash
+# Two short high-pitched beeps
+ros2 topic pub --once /buzzer std_msgs/msg/Float32MultiArray \
+    "data: [1900.0, 0.1, 0.05, 2]"
+
+# One long low-pitched tone (error/warning)
+ros2 topic pub --once /buzzer std_msgs/msg/Float32MultiArray \
+    "data: [400.0, 2.0, 0.0, 1]"
+```
+
+#### Startup tones
+
+The hardware interface automatically sounds the buzzer when the robot starts:
+
+| Event | Tone |
+|-------|------|
+| OK    `on_activate()` success (hardware ready) | 1900 Hz · 0.1 s on · 0.05 s off · **2 beeps** |
+| ERROR `on_init()` failure (URDF/joint config error) | 400 Hz · 2 s on · **1 long tone** |
 
 ---
 
