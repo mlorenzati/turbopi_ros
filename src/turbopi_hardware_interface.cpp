@@ -151,7 +151,7 @@ namespace turbopi_hardware_interface
         //   on_time   – seconds the beep is on
         //   off_time  – seconds between beeps
         //   repeat    – number of beeps
-        // Example: ros2 topic pub --once /buzzer std_msgs/msg/Float32MultiArray \
+        // Example: ros2 topic pub --once /buzzer std_msgs/msg/Float32MultiArray 
         //            "data: [1900.0, 0.1, 0.05, 2]"
         buzzer_sub_ = battery_node_->create_subscription<std_msgs::msg::Float32MultiArray>(
             "/buzzer",

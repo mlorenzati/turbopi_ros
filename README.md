@@ -1,10 +1,6 @@
-# TurboPi ROS - pi 5 board version
+# TurboPi ROS - pi 5 board
 
-<img width="1672" height="941" alt="image" src="https://github.com/user-attachments/assets/15b94b0e-b6e3-4221-b974-ab5776f6b17d" />
-"Everything looks better with a Commodore Amiga on the back"
-
-## Notes 
-This project is a collaboration to the work done by [Whilliam L Thomson](https://github.com/wltjr) to support into [TurboPi](https://github.com/wltjr/turbopi_ros) the new board for the raspberry pi 5.
+This fork project is a collaboration to the work done by [Whilliam L Thomson](https://github.com/wltjr) to support into [TurboPi](https://github.com/wltjr/turbopi_ros) the new board for the raspberry pi 5.
 Licenses and credits fully goes to the original work creator and the plan is to move it back there with colcon compilation options passing the board for rpi4 or 5
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=plastic)](https://github.com/wltjr/turbopi_ros/blob/master/LICENSE.txt)

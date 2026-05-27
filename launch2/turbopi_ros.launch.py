@@ -8,6 +8,7 @@ from launch.event_handlers import OnProcessExit, OnProcessStart
 from launch.launch_context import LaunchContext
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def _mecanum_drive_available() -> bool:
@@ -66,7 +67,9 @@ def launch_setup(context: LaunchContext):
             " ",
         ]
     )
-    robot_description = {'robot_description': robot_description_content}
+    robot_description = {
+        'robot_description': ParameterValue(robot_description_content, value_type=str)
+    }
 
     controller_manager = Node(
         package='controller_manager',
