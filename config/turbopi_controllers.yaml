@@ -12,7 +12,7 @@ controller_manager:
       type: mecanum_drive_controller/MecanumDriveController
 
     position_controllers:
-      type: position_controllers/JointGroupPositionController
+      type: joint_trajectory_controller/JointTrajectoryController
 
 diff_drive_controller:
   ros__parameters:
@@ -53,3 +53,9 @@ position_controllers:
     joints:
       - camera_joint
       - camera_frame_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+    allow_partial_joints_goal: true
+    open_loop_control: true
