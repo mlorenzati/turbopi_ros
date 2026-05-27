@@ -12,8 +12,9 @@
  *      positive effort = forward on both sides, matching the Pi5 mecanum.py
  *      pattern: board.set_motor_duty([[1, -v1], [2, v2], [3, -v3], [4, v4]])
  *
- *  Servo PWM pulse calculation is preserved from the Pi4 Board.py:
- *    pulse = ((200 * angle) / 9) + 500
+ *  Servo PWM pulse calculation updated for the Pi5 STM32 board:
+ *    pulse = (effort * 400) + 1500  µs  (range 1100-1900, center 1500)
+ *  Reference: turbopi_ros2_pi5/src/driver/sdk/sdk/PWMServoControlDemo.py
  */
 
 #include <stdlib.h>
@@ -89,27 +90,30 @@ namespace turbopi
         {
             if (effort != _previousEffort)
             {
-                // Map effort [-1..1] → angle [0..180]
-                uint8_t angle = static_cast<uint8_t>(effort * 90.0 + 90.0);
+                // Map effort [-1..1] → pulse [1100..1900] µs, center 1500 µs.
+                // Reference: turbopi_ros2_pi5 PWMServoControlDemo.py which uses
+                // board.pwm_servo_set_position(t, [[id, pulse]]) with values
+                // in the range 1100-1900 µs and center at 1500 µs.
+                // Clamp effort to [-1..1] before computing pulse.
+                double clamped = effort;
+                if (clamped > 1.0)  clamped = 1.0;
+                if (clamped < -1.0) clamped = -1.0;
 
-                if (angle > 180)
-                    angle = 180;
-                if (angle > max_)
-                    angle = max_;
-                if (angle < min_)
-                    angle = min_;
+                uint16_t pulse = static_cast<uint16_t>(clamped * 400.0 + 1500.0);
 
-                // Pulse width in microseconds (same formula as Pi4 Board.py)
-                uint16_t pulse = static_cast<uint16_t>(((200u * angle) / 9u) + 500u);
+                // Safety clamp to valid hardware range
+                if (pulse > 1900) pulse = 1900;
+                if (pulse < 1100) pulse = 1100;
 
                 // PWM servo id on the Pi5 board is 1-based (id_ 5→1, 6→2)
                 uint8_t servo_id = id_ - 4u;
 
+                // duration in seconds (0.1 s = fast move)
                 board_->pwmServoSetPosition(0.1f, {{servo_id, pulse}});
 
-                RCLCPP_DEBUG(rclcpp::get_logger(CLASS_NAME),
-                             "servo %u (board id %u): effort=%.3f angle=%u° pulse=%u µs",
-                             id_, servo_id, effort, angle, pulse);
+                RCLCPP_INFO(rclcpp::get_logger(CLASS_NAME),
+                             "servo %u (board id %u): effort=%.3f → pulse=%u µs",
+                             id_, servo_id, effort, pulse);
             }
         }
 
