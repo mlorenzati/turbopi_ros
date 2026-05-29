@@ -29,6 +29,12 @@ RPLIDAR_DEST="/etc/udev/rules.d/99-rplidar.rules"
 echo "Installing udev rule: $RPLIDAR_SRC -> $RPLIDAR_DEST"
 sudo cp "$RPLIDAR_SRC" "$RPLIDAR_DEST"
 
+# V4L2 camera devices → video group with rw access
+VIDEO_SRC="$SCRIPT_DIR/99-video.rules"
+VIDEO_DEST="/etc/udev/rules.d/99-video.rules"
+echo "Installing udev rule: $VIDEO_SRC -> $VIDEO_DEST"
+sudo cp "$VIDEO_SRC" "$VIDEO_DEST"
+
 echo "Reloading udev rules..."
 sudo udevadm control --reload-rules
 sudo udevadm trigger
@@ -55,9 +61,11 @@ else
     fi
 fi
 
-# ── 3. Add user to dialout group ──────────────────────────────────────────────
+# ── 3. Add user to required groups ────────────────────────────────────────────
 
 REAL_USER="${SUDO_USER:-$USER}"
+
+# dialout – required for /dev/rrc (STM32) and /dev/rplidar (RPLidar)
 if ! groups "$REAL_USER" | grep -q dialout; then
     echo "Adding $REAL_USER to dialout group..."
     sudo usermod -aG dialout "$REAL_USER"
@@ -65,6 +73,16 @@ if ! groups "$REAL_USER" | grep -q dialout; then
     NEED_REBOOT=1
 else
     echo "$REAL_USER is already in dialout group."
+fi
+
+# video – required for /dev/video* (USB camera via v4l2_camera_node)
+if ! groups "$REAL_USER" | grep -q video; then
+    echo "Adding $REAL_USER to video group..."
+    sudo usermod -aG video "$REAL_USER"
+    echo "Group change requires logout/login (or reboot) to take effect."
+    NEED_REBOOT=1
+else
+    echo "$REAL_USER is already in video group."
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
@@ -76,9 +94,11 @@ if [ "${NEED_REBOOT:-0}" = "1" ]; then
     echo "  After reboot, verify with:"
     echo "    ls -la /dev/rrc       (STM32 board)"
     echo "    ls -la /dev/rplidar   (RPLidar, when USB plugged in)"
+    echo "    ls -la /dev/video0    (USB camera)"
     echo "======================================================="
 else
-    echo "All done. Verify the symlinks with:"
+    echo "All done. Verify the devices with:"
     echo "  ls -la /dev/rrc       (STM32 board)"
     echo "  ls -la /dev/rplidar   (RPLidar, when USB plugged in)"
+    echo "  ls -la /dev/video0    (USB camera)"
 fi
