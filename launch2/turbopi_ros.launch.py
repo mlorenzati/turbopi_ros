@@ -109,6 +109,8 @@ def launch_setup(context: LaunchContext):
         executable="spawner",
         arguments=["mecanum_drive_controller", "-c", CM,
             "--controller-ros-args",
+            "-r /mecanum_drive_controller/tf_odometry:=/tf",
+            "--controller-ros-args",
             "-r /mecanum_drive_controller/reference:=/cmd_vel",
             "--controller-ros-args",
             "-r /mecanum_drive_controller/odometry:=/odom",
@@ -157,6 +159,9 @@ def launch_setup(context: LaunchContext):
             'use_sim_time': sim,
             'autostart': True,
             'node_names': ['slam_toolbox'],
+            # Increase bond timeout: slam_toolbox can be slow to respond during
+            # startup while it waits for TF. Default 4s is too short.
+            'bond_timeout': 10.0,
         }],
     )
 
