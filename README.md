@@ -275,6 +275,167 @@ Simulation only (no hardware required):
 ros2 launch turbopi_ros turbopi_ros.launch.py sim:=True
 ```
 
+---
+
+## SLAM Mapping & Autonomous Navigation
+
+This section describes how to run **SLAM** (using `slam_toolbox`) and
+**autonomous navigation** (using Nav 2) on the real robot. All commands assume
+the workspace has been built and sourced (`source /opt/ros_ws/install/setup.bash`).
+
+### TF Frame Convention
+
+All TF frames use the `turbopi/` namespace prefix. The full chain is:
+
+```
+turbopi/map  ←  slam_toolbox publishes
+turbopi/odom ←  drive controller (mecanum or diff)
+turbopi/base_link ← drive controller / robot_state_publisher
+```
+
+This is consistent across `turbopi_controllers.yaml`, `slam_toolbox.yaml`, and
+`nav2_params.yaml`. The RViz configs use `turbopi/map` as the Fixed Frame so
+the map, laser scan, robot model and costmaps all render together.
+
+---
+
+### Step 1 — Start the robot (on the Pi)
+
+Open **Terminal 1** on the Raspberry Pi 5 and launch the hardware stack with
+mecanum drive, camera and lidar:
+
+```bash
+# With 2DOF USB camera + RPLidar (mecanum drive) — most common for SLAM
+ros2 launch turbopi_ros turbopi_ros.launch.py \
+    drive:=mecanum \
+    camera:=True camera_type:=default \
+    lidar:=True
+```
+
+> **Depth camera variant** — swap `camera_type:=default` for `camera_type:=depth`
+> to use the Orbbec Astra S. Use `turbopi_depth.rviz` on your desktop when
+> visualising.
+
+---
+
+### Step 2 — Start the gamepad (optional, for teleoperation during mapping)
+
+Open **Terminal 2** (Pi or desktop):
+
+```bash
+ros2 launch turbopi_ros gamepad.launch.py
+```
+
+Drive the robot around your environment to build the map.
+
+---
+
+### Step 3 — SLAM mapping (slam_toolbox)
+
+SLAM is launched as part of `turbopi_ros.launch.py` when `lidar:=True` is set —
+`slam_toolbox` starts automatically in **online async** mode using
+`config/slam_toolbox.yaml`.
+
+To verify the map is being built:
+
+```bash
+# Check /map topic is publishing
+ros2 topic hz /map
+
+# Inspect the current TF tree (should show turbopi/map → turbopi/odom → turbopi/base_link)
+ros2 run tf2_tools view_frames
+```
+
+#### Visualise on a desktop / laptop
+
+Run RViz2 on your desktop (connected to the same ROS domain or via `ROS_DOMAIN_ID`):
+
+```bash
+# Standard camera config
+ros2 run rviz2 rviz2 \
+    -d ~/ros2_ws/install/turbopi_ros/share/turbopi_ros/config/turbopi.rviz
+
+# Depth camera config
+ros2 run rviz2 rviz2 \
+    -d ~/ros2_ws/install/turbopi_ros/share/turbopi_ros/config/turbopi_depth.rviz
+```
+
+The Fixed Frame is set to `turbopi/map` — the map, laser scan, robot model and
+Nav2 costmaps all appear together once the full stack is running.
+
+#### Save a finished map
+
+Once you are happy with the map, save it using the `slam_toolbox` service or
+the **SlamToolbox** panel in RViz2:
+
+```bash
+# Via CLI (saves to ~/map by default)
+ros2 service call /slam_toolbox/save_map slam_toolbox/srv/SaveMap \
+    "name: {data: '/home/$USER/my_map'}"
+```
+
+This creates `my_map.pgm` (occupancy grid image) and `my_map.yaml` (metadata).
+
+---
+
+### Step 4 — Autonomous Navigation (Nav 2)
+
+Open **Terminal 3** (Pi or desktop):
+
+```bash
+ros2 launch turbopi_ros nav2.launch.py
+```
+
+Nav 2 uses `config/nav2_params.yaml` which is pre-configured for the
+`turbopi/` TF namespace and the mecanum footprint.
+
+> **Note:** `nav2.launch.py` currently sets `use_sim_time: true`. For real
+> hardware change it to `false`, or pass it on the command line:
+> ```bash
+> ros2 launch turbopi_ros nav2.launch.py use_sim_time:=false
+> ```
+
+#### Send a navigation goal
+
+**From RViz2:** click the **Nav2 Goal** tool (or **2D Goal Pose**) and click
+a destination on the map.
+
+**From the terminal:**
+
+```bash
+ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
+    "{pose: {header: {frame_id: 'turbopi/map'},
+             pose: {position: {x: 1.0, y: 0.5, z: 0.0},
+                    orientation: {w: 1.0}}}}"
+```
+
+#### Set an initial pose (localisation)
+
+If Nav 2 is started with an existing map (localisation mode), publish the
+robot's initial pose before sending goals:
+
+```bash
+ros2 topic pub --once /initialpose geometry_msgs/msg/PoseWithCovarianceStamped \
+    "{header: {frame_id: 'turbopi/map'},
+      pose: {pose: {position: {x: 0.0, y: 0.0, z: 0.0},
+                    orientation: {w: 1.0}},
+             covariance: [0.25,0,0,0,0,0, 0,0.25,0,0,0,0, 0,0,0,0,0,0,
+                          0,0,0,0,0,0, 0,0,0,0,0,0, 0,0,0,0,0,0.068]}}"
+```
+
+---
+
+### Quick-reference — all terminals at once
+
+| Terminal | Where | Command |
+|----------|-------|---------|
+| 1 — Robot + SLAM | Pi | `ros2 launch turbopi_ros turbopi_ros.launch.py drive:=mecanum camera:=True camera_type:=default lidar:=True` |
+| 2 — Gamepad | Pi or desktop | `ros2 launch turbopi_ros gamepad.launch.py` |
+| 3 — Nav 2 | Pi or desktop | `ros2 launch turbopi_ros nav2.launch.py` |
+| 4 — RViz2 | Desktop | `ros2 run rviz2 rviz2 -d ~/ros2_ws/install/turbopi_ros/share/turbopi_ros/config/turbopi.rviz` |
+
+---
+
 ### Docker Containers
 
 Three docker containers have been made to aid primarily in development, but the
