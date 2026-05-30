@@ -22,8 +22,10 @@ diff_drive_controller:
     wheel_separation: 1.0 # 0.192
     wheel_radius: 0.0325
 
-    odom_frame_id: odom
-    base_frame_id: base_link
+    # Frame IDs must match slam_toolbox.yaml and nav2_params.yaml which use
+    # the namespaced "turbopi/" prefix so all TF lookups succeed.
+    odom_frame_id: turbopi/odom
+    base_frame_id: turbopi/base_link
 
     enable_odom_tf: true
     cmd_vel_timeout: 20.0
@@ -42,8 +44,10 @@ mecanum_drive_controller:
       wheels_radius: 0.0325
       sum_of_robot_center_projection_on_X_Y_axis: 1.0
 
-    base_frame_id: base_link
-    odom_frame_id: odom
+    # Frame IDs must match slam_toolbox.yaml and nav2_params.yaml which use
+    # the namespaced "turbopi/" prefix so all TF lookups succeed.
+    base_frame_id: turbopi/base_link
+    odom_frame_id: turbopi/odom
     enable_odom_tf: true
     twist_covariance_diagonal: [0.0, 7.0, 14.0, 21.0, 28.0, 35.0]
     pose_covariance_diagonal: [0.0, 6.0, 12.0, 18.0, 24.0, 30.0]
