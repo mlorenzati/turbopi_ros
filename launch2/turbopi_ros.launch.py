@@ -109,9 +109,9 @@ def launch_setup(context: LaunchContext):
         executable="spawner",
         arguments=["mecanum_drive_controller", "-c", CM,
             "--controller-ros-args",
-            "-r /mecanum_drive_controller/tf_odometry:=/tf",
-            "--controller-ros-args",
             "-r /mecanum_drive_controller/reference:=/cmd_vel",
+            "--controller-ros-args",
+            "-r /mecanum_drive_controller/odometry:=/odom",
         ],
     )
 
