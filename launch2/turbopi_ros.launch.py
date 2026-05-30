@@ -140,12 +140,24 @@ def launch_setup(context: LaunchContext):
     slam_toolbox_node = Node(
         package='slam_toolbox',
         executable='async_slam_toolbox_node',
-        parameters=[ slam_params_file, {'use_sim_time': sim, 'paused_new_measurements': False} ],
-        # Suppress the spurious "[rclcpp]: Failed to get parameters: paused_new_measurements"
-        # warning that comes from a slam_toolbox Jazzy bug: the node's async parameter client
-        # polls its own parameter before fully declaring it.  Setting rclcpp logger to ERROR
-        # silences this harmless but noisy warning without affecting slam_toolbox's own logger.
-        ros_arguments=['--log-level', 'rclcpp:=ERROR'],
+        parameters=[ slam_params_file, {'use_sim_time': sim} ],
+        output='screen',
+    )
+
+    # slam_toolbox 2.8.4 (Jazzy) auto-configures but does NOT auto-activate.
+    # A lifecycle_manager with autostart=True sends configure→activate automatically.
+    # It is launched 5 s after slam_toolbox starts (giving the node time to finish
+    # on_configure() before the manager sends the activate transition).
+    lifecycle_manager_slam = Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='lifecycle_manager_slam',
+        output='screen',
+        parameters=[{
+            'use_sim_time': sim,
+            'autostart': True,
+            'node_names': ['slam_toolbox'],
+        }],
     )
 
     battery_monitor_node = Node(
@@ -242,12 +254,15 @@ def launch_setup(context: LaunchContext):
     )
 
     # Give rplidar_node 3 s to fully initialise, then start slam_toolbox.
+    # After a further 5 s (slam_toolbox needs ~3 s to finish on_configure),
+    # start the lifecycle_manager which auto-activates slam_toolbox.
     # No /start_motor call needed – rplidar_node auto-starts the motor on init.
     delayed_slam_toolbox_node_spawner = RegisterEventHandler(
         event_handler=OnProcessStart(
             target_action=rplidar_node,
             on_start=[
                 TimerAction(period=3.0, actions=[slam_toolbox_node]),
+                TimerAction(period=8.0, actions=[lifecycle_manager_slam]),
             ],
         )
     )
