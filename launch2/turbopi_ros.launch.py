@@ -140,7 +140,7 @@ def launch_setup(context: LaunchContext):
     slam_toolbox_node = Node(
         package='slam_toolbox',
         executable='async_slam_toolbox_node',
-        parameters=[ slam_params_file, {'use_sim_time': True, 'paused_new_measurements': False} ],
+        parameters=[ slam_params_file, {'use_sim_time': sim, 'paused_new_measurements': False} ],
         # Suppress the spurious "[rclcpp]: Failed to get parameters: paused_new_measurements"
         # warning that comes from a slam_toolbox Jazzy bug: the node's async parameter client
         # polls its own parameter before fully declaring it.  Setting rclcpp logger to ERROR
