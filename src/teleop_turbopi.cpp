@@ -44,8 +44,8 @@ namespace teleop_turbopi
         auto cmd_vel_msg = std::make_unique<geometry_msgs::msg::TwistStamped>();
         cmd_vel_msg->header.stamp = get_clock()->now();
         cmd_vel_msg->header.frame_id = "";
-        cmd_vel_msg->twist.linear.x  = joy_msg->axes[std::to_underlying(TurboPi::axes::LEFT_JOY_Y)];
-        cmd_vel_msg->twist.angular.z = joy_msg->axes[std::to_underlying(TurboPi::axes::LEFT_JOY_X)];
+        cmd_vel_msg->twist.linear.x  = LINEAR_SCALE  * joy_msg->axes[std::to_underlying(TurboPi::axes::LEFT_JOY_Y)];
+        cmd_vel_msg->twist.angular.z = ANGULAR_SCALE * joy_msg->axes[std::to_underlying(TurboPi::axes::LEFT_JOY_X)];
         publisher_cmd_vel_->publish(std::move(cmd_vel_msg));
 
         // ── Camera pan/tilt (JointTrajectory) ─────────────────────────────────

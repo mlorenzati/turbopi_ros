@@ -100,6 +100,12 @@ namespace teleop_turbopi
             // Step size per joystick callback (joystick axis value [-1..1] × step)
             static constexpr double CAMERA_STEP = 0.05;
 
+            // Speed scale factors applied to joystick axes before publishing cmd_vel.
+            // Reduce ANGULAR_SCALE to slow down in-place rotation (helps slam_toolbox
+            // scan matching keep up during turns).
+            static constexpr double LINEAR_SCALE  = 1.0;  // forward/back  (m/s at full stick)
+            static constexpr double ANGULAR_SCALE = 0.5;  // rotation      (rad/s at full stick)
+
             /**
              * @brief Callback function for subscription fired when messages
              *        on the joy topic are heard
