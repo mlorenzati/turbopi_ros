@@ -378,6 +378,66 @@ This creates `my_map.pgm` (occupancy grid image) and `my_map.yaml` (metadata).
 
 ---
 
+### SLAM lifecycle — when does mapping stop?
+
+`slam_toolbox` in **mapping mode** (`mode: mapping`, the default in
+`config/slam_toolbox.yaml`) **never stops automatically** — it continuously
+refines the map as long as the robot is running and the lidar is spinning.
+There is no automatic transition from "mapping" to "navigation"; they are
+separate, explicit steps.
+
+The typical workflow is:
+
+```
+[mapping mode]  →  drive around  →  save map  →  [restart in localization mode]
+```
+
+#### Option A — Pure localization with a saved map (recommended for Nav2)
+
+1. Save the map (see above).
+2. Stop the main launcher (`Ctrl+C`).
+3. Edit `config/slam_toolbox.yaml`, change:
+   ```yaml
+   mode: localization          # was: mapping
+   map_file_name: /home/marce/my_map   # path without extension
+   ```
+4. Relaunch — slam_toolbox loads the saved map and only publishes the
+   `map→odom` TF (localization), without modifying the map.
+
+#### Option B — Continue mapping across sessions (slam_toolbox serialization)
+
+slam_toolbox can serialize its internal graph and resume a previous mapping
+session. Save with:
+
+```bash
+ros2 service call /slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseGraph \
+    "filename: {data: '/home/marce/my_map_session'}"
+```
+
+On next launch, set in `slam_toolbox.yaml`:
+```yaml
+mode: mapping
+map_file_name: /home/marce/my_map_session
+```
+
+slam_toolbox resumes from the saved graph — useful for large environments
+mapped across multiple sessions.
+
+#### Option C — Run mapping and Nav2 simultaneously (current default)
+
+The current `turbopi_ros.launch.py` starts slam_toolbox in mapping mode
+alongside Nav2. In this configuration:
+
+- **slam_toolbox** continuously refines the map (good for unknown environments)
+- **Nav2** plans paths on the live (always-updating) map
+- The `map→odom` TF is always current
+
+This works well for **exploration** but the map may shift slightly under Nav2's
+feet during large loop closures. For **repeatable navigation** in a known
+environment, Option A (localization with a fixed map) is more stable.
+
+---
+
 ### Step 4 — Autonomous Navigation (Nav 2)
 
 Open **Terminal 3** (Pi or desktop):
@@ -488,8 +548,10 @@ commands to the robot.
 | ------------- | ------------- |
 | Left stick Y (up/down) | Drive forward / backward |
 | Left stick X (left/right) | Rotate left / rotate right |
+| **D-pad left/right** | **Strafe left / right** (mecanum only — pure lateral, no rotation) |
 | Right stick Y | Camera tilt up / down |
 | Right stick X | Camera pan left / right |
+| **SQUARE button** | **Honk** — two short beeps from the buzzer |
 | SHARE button ⚠️ | **Shuts down the Raspberry Pi** (`sudo init 0`) |
 | All other buttons | Unused |
 
@@ -497,9 +559,9 @@ commands to the robot.
 > `camera_type:=default` (2DOF pan/tilt servo camera). With the depth camera
 > (`camera_type:=depth`, the default) those joints do not exist.
 >
-> **Note:** Left stick X maps to `angular.z` (rotation), not lateral strafe.
-> True mecanum sideways movement from the gamepad would require remapping
-> right stick X to `twist.linear.y`.
+> **Note:** D-pad strafe sends `twist.linear.y` which is only acted upon by
+> the `mecanum_drive_controller`. When using `diff` drive it is silently
+> ignored.
 
 ### Alternatives
 
